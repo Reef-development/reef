@@ -1,0 +1,29 @@
+{
+  "name": "@reef/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/server.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "endpoints": "tsx scripts/endpoints.ts",
+    "endpoints:check": "tsx scripts/endpoints.ts --check"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.0",
+    "@reef/shared": "file:../shared",
+    "@supabase/supabase-js": "^2.110.7",
+    "hono": "^4.9.0",
+    "jose": "^6.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

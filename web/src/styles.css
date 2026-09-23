@@ -1,0 +1,346 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system definition.
+ *
+ * The @theme inline block maps CSS custom properties to Tailwind utility
+ * classes (e.g. --color-primary -> bg-primary, text-primary).
+ *
+ * The :root and .dark blocks define the actual color values using oklch.
+ * All colors MUST use oklch format.
+ *
+ * To add a new semantic color:
+ * 1. Add the variable to :root (light value) and .dark (dark value)
+ * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.625rem;
+  /* REEF boutique mining palette: deep navy #0d1b2a + gold #c9a227 on warm bone */
+  --background: oklch(0.965 0.008 85);
+  --foreground: oklch(0.18 0.03 250);
+  --card: oklch(0.995 0.004 85);
+  --card-foreground: oklch(0.18 0.03 250);
+  --popover: oklch(0.995 0.004 85);
+  --popover-foreground: oklch(0.18 0.03 250);
+  --primary: oklch(0.22 0.04 250);
+  --primary-foreground: oklch(0.97 0.01 85);
+  --secondary: oklch(0.93 0.012 85);
+  --secondary-foreground: oklch(0.22 0.04 250);
+  --muted: oklch(0.94 0.01 85);
+  --muted-foreground: oklch(0.48 0.02 250);
+  --accent: oklch(0.75 0.14 85);
+  --accent-foreground: oklch(0.18 0.03 250);
+  --destructive: oklch(0.55 0.22 27);
+  --destructive-foreground: oklch(0.97 0.01 85);
+  --border: oklch(0.88 0.012 250);
+  --input: oklch(0.9 0.012 250);
+  --ring: oklch(0.75 0.14 85);
+  --chart-1: oklch(0.75 0.14 85);
+  --chart-2: oklch(0.32 0.06 250);
+  --chart-3: oklch(0.6 0.12 145);
+  --chart-4: oklch(0.55 0.2 27);
+  --chart-5: oklch(0.5 0.08 250);
+  --sidebar: oklch(0.18 0.03 250);
+  --sidebar-foreground: oklch(0.93 0.01 85);
+  --sidebar-primary: oklch(0.75 0.14 85);
+  --sidebar-primary-foreground: oklch(0.18 0.03 250);
+  --sidebar-accent: oklch(0.24 0.035 250);
+  --sidebar-accent-foreground: oklch(0.97 0.01 85);
+  --sidebar-border: oklch(0.28 0.03 250);
+  --sidebar-ring: oklch(0.75 0.14 85);
+  --font-display: "Oswald", "Barlow Condensed", "Impact", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Barlow", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    background-image:
+      radial-gradient(oklch(0.75 0.14 85 / 0.06) 1px, transparent 1px),
+      radial-gradient(oklch(0.18 0.03 250 / 0.04) 1px, transparent 1px);
+    background-size: 22px 22px, 22px 22px;
+    background-position: 0 0, 11px 11px;
+  }
+
+  h1, h2, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+}
+
+@utility text-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+@utility text-stencil {
+  font-family: var(--font-display);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+@utility mining-rule {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--accent) 0 12px,
+    transparent 12px 20px
+  );
+  height: 2px;
+  width: 100%;
+}
+
+/* ============ Motion ============ */
+@keyframes reef-fade-up {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes reef-fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes reef-scale-in {
+  0% { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes reef-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes reef-pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 40%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in oklab, var(--accent) 0%, transparent); }
+}
+
+@utility animate-fade-up { animation: reef-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@utility animate-fade-in-soft { animation: reef-fade-in 0.5s ease-out both; }
+@utility animate-scale-in-soft { animation: reef-scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@layer base {
+  /* Smooth interactive transitions everywhere */
+  a, button, [role="button"], input, textarea, select,
+  [data-slot="sidebar-menu-button"], [data-sidebar="menu-button"] {
+    transition: color 200ms ease, background-color 200ms ease,
+                border-color 200ms ease, box-shadow 200ms ease,
+                transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 200ms ease;
+  }
+  img { transition: opacity 300ms ease, transform 300ms cubic-bezier(0.22, 1, 0.36, 1); }
+  html { scroll-behavior: smooth; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@utility hover-lift {
+  @apply transition-transform duration-200;
+}
+.hover-lift:hover { transform: translateY(-2px); }
+
+.reef-tile { position: relative; overflow: hidden; }
+.reef-tile::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.12) 50%, transparent 70%);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+.reef-tile:hover::after { opacity: 1; animation: reef-shimmer 1.2s ease forwards; }
+
+/* ============ Auth / boutique industrial ============ */
+@keyframes reef-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes reef-scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  35% { opacity: 1; }
+  100% { transform: translateY(1200%); opacity: 0; }
+}
+@keyframes reef-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.reef-marquee { display: flex; width: max-content; animation: reef-marquee 34s linear infinite; }
+.reef-marquee:hover { animation-play-state: paused; }
+
+@utility reef-scanline {
+  position: relative;
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 30%;
+    background: linear-gradient(180deg, transparent, color-mix(in oklab, var(--accent) 10%, transparent), transparent);
+    animation: reef-scan 9s linear infinite;
+    pointer-events: none;
+  }
+}
+
+@utility reef-live-dot {
+  animation: reef-blink 1.8s ease-in-out infinite;
+}
+
+@utility num-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ============ Auth video stage ============ */
+@keyframes reef-veil {
+  0% { opacity: 0; transform: scale(1.08); filter: blur(8px); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes reef-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+@keyframes reef-drift {
+  0%, 100% { transform: scale(1.06) translate3d(0,0,0); }
+  50% { transform: scale(1.12) translate3d(-1.2%, -1%, 0); }
+}
+
+.reef-video {
+  animation: reef-veil 1400ms cubic-bezier(0.16,1,0.3,1) both,
+             reef-drift 26s ease-in-out infinite 1400ms;
+}
+
+.reef-sweep::after {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 18%;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 22%, transparent), transparent);
+  animation: reef-sweep 7s cubic-bezier(0.45,0,0.15,1) infinite;
+  pointer-events: none;
+}
+
+.reef-grain::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background-image: radial-gradient(rgba(255,255,255,0.35) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+  opacity: 0.05;
+  animation: reef-blink 4s steps(3, end) infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reef-video, .reef-sweep::after, .reef-grain::before, .reef-marquee { animation: none !important; }
+}
+
+/* Number inputs: no native spinners (they clip the border on narrow fields),
+   and the focus ring sits above neighbouring fields in tight grids. */
+.num-input::-webkit-outer-spin-button,
+.num-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.num-input {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
