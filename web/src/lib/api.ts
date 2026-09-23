@@ -54,12 +54,29 @@ export async function apiListAll<T>(path: string, params: Record<string, string>
 
 export type Me = { id: string; role: Role | null };
 
-/** The signed-in user as the API sees them, or null when nobody is signed in. */
+const ME_TTL_MS = 30_000;
+let meCache: { token: string; at: number; value: Promise<Me | null> } | null = null;
+
+/**
+ * The signed-in user as the API sees them, or null when nobody is signed in. Every route guard
+ * asks this, including when the router preloads a page on hover, so the answer is reused for
+ * 30 seconds per session. A different sign-in has a different token and is never served a
+ * cached answer.
+ */
 export async function fetchMe(): Promise<Me | null> {
-  try {
-    return (await api<Me>("/api/v1/me")).data;
-  } catch (e) {
-    if (e instanceof ApiRequestError && e.code === "UNAUTHENTICATED") return null;
-    throw e;
-  }
+  const { data: auth } = await supabase.auth.getSession();
+  const token = auth.session?.access_token;
+  if (!token) return null;
+  if (meCache && meCache.token === token && Date.now() - meCache.at < ME_TTL_MS) return meCache.value;
+
+  const value = api<Me>("/api/v1/me").then(
+    (res) => res.data,
+    (e) => {
+      meCache = null;
+      if (e instanceof ApiRequestError && e.code === "UNAUTHENTICATED") return null;
+      throw e;
+    },
+  );
+  meCache = { token, at: Date.now(), value };
+  return value;
 }
