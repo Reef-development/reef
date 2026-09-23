@@ -11,7 +11,7 @@
   "typecheck": "tsc --noEmit",
   "lint": "eslint .",
   "format": "prettier --write .",
-  "test": "node --test",
+  "test": "node --env-file=.env --test",
   "test:quick": "node --test tests/quick.test.mjs",
   "test:db": "node --env-file=.env --test tests/db.test.mjs",
   "api:check": "node scripts/check-api.mjs",
