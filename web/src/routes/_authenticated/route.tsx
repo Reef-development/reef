@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect, useNavigate, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchMe } from "@/lib/api";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Button } from "@/components/ui/button";
@@ -11,14 +12,11 @@ export const Route = createFileRoute("/_authenticated")({
   beforeLoad: async () => {
     const { data, error } = await supabase.auth.getUser();
     if (error || !data.user) throw redirect({ to: "/auth" });
-    const { data: roles } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", data.user.id);
-    const list = (roles ?? []).map((r: any) => r.role);
-    const isOwnerish = list.includes("owner") || list.includes("manager");
-    if (!isOwnerish) throw redirect({ to: "/worker" });
-    return { user: data.user, roles: list as string[] };
+    // The role comes from the API, which is also what enforces it on every request.
+    const me = await fetchMe();
+    if (!me) throw redirect({ to: "/auth" });
+    if (me.role !== "owner" && me.role !== "manager") throw redirect({ to: "/worker" });
+    return { user: data.user, role: me.role };
   },
   component: AuthedLayout,
 });

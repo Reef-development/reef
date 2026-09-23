@@ -1,25 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import type { Role } from "@reef/shared";
+import { fetchMe } from "@/lib/api";
 
-export type Role = "owner" | "manager" | "worker";
+export type { Role };
 
+/**
+ * The signed-in user's role as the API reports it. This only decides what the screens show;
+ * the API enforces every permission itself, so hiding a button here is never the security.
+ */
 export function useMyRole() {
   return useQuery({
     queryKey: ["me", "role"],
-    queryFn: async (): Promise<Role | null> => {
-      const { data: userRes } = await supabase.auth.getUser();
-      if (!userRes.user) return null;
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userRes.user.id);
-      if (error) return null;
-      const roles = (data ?? []).map((r: any) => r.role as Role);
-      if (roles.includes("owner")) return "owner";
-      if (roles.includes("manager")) return "manager";
-      if (roles.includes("worker")) return "worker";
-      return null;
-    },
+    queryFn: async (): Promise<Role | null> => (await fetchMe())?.role ?? null,
     staleTime: 60_000,
   });
 }
