@@ -30,3 +30,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Per-app environment files (never commit)
+api/.env
+web/.env
