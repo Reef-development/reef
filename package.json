@@ -4,13 +4,19 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "build:dev": "vite build --mode development",
-    "preview": "vite preview",
-    "lint": "eslint .",
-    "format": "prettier --write ."
-  },
+  "dev": "vite dev",
+  "build": "vite build",
+  "build:dev": "vite build --mode development",
+  "preview": "vite preview",
+  "typecheck": "tsc --noEmit",
+  "lint": "eslint .",
+  "format": "prettier --write .",
+  "test": "node --test",
+  "test:quick": "node --test tests/quick.test.mjs",
+  "test:db": "node --env-file=.env --test tests/db.test.mjs",
+  "api:check": "node scripts/check-api.mjs",
+  "secrets:check": "node scripts/check-secrets.mjs"
+},
   "dependencies": {
     "@ai-sdk/openai": "^3",
     "@ai-sdk/react": "^3",
