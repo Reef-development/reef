@@ -296,6 +296,45 @@ export type Database = {
           },
         ]
       }
+            personal_information_audit: {
+        Row: {
+          id: string
+          user_id: string | null
+          employee_id: string | null
+          action: string
+          allowed: boolean
+          reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          employee_id?: string | null
+          action?: string
+          allowed: boolean
+          reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          employee_id?: string | null
+          action?: string
+          allowed?: boolean
+          reason?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_information_audit_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       equipment: {
         Row: {
           created_at: string
@@ -358,6 +397,7 @@ export type Database = {
           },
         ]
       }
+
       fuel_slips: {
         Row: {
           cost_per_litre: number
