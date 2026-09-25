@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
 import { createApp } from "../src/app.js";
 import type { Repositories } from "../src/repositories/index.js";
-import type { Page, Repository } from "../src/repositories/types.js";
+import type { Page, Repository, UpdateResult } from "../src/repositories/types.js";
+
+/** Yields to other pending requests, so overlapping calls in a test really do interleave. */
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 /** Token → user and the roles stored for them, standing in for Supabase Auth and `user_roles`. */
 export const USERS: Record<string, { id: string; roles: string[] }> = {
@@ -16,6 +19,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
 
   async list(q: ListQuery): Promise<Page<Mine>> {
+    await tick();
     const key = (q.sort ?? "name") as keyof Mine;
     const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
     if (q.order === "desc") sorted.reverse();
@@ -23,6 +27,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     return { rows: sorted.slice(from, from + q.pageSize), total: this.rows.length };
   }
   async get(id: string) {
+    await tick();
     return this.rows.find((r) => r.id === id) ?? null;
   }
   async create(input: MineInput) {
@@ -34,6 +39,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       team_name: null,
       target_cost_per_ton: null,
       active: true,
+      version: 1,
       created_at: now,
       updated_at: now,
       ...input,
@@ -41,11 +47,14 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-  async update(id: string, patch: MinePatch) {
+  /** Like the database: the version check and the write happen together, with no await between. */
+  async update(id: string, patch: MinePatch, expectedVersion: number): Promise<UpdateResult<Mine>> {
+    await tick();
     const row = this.rows.find((r) => r.id === id);
-    if (!row) return null;
-    Object.assign(row, patch, { updated_at: new Date().toISOString() });
-    return row;
+    if (!row) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
   }
   async remove(id: string) {
     const before = this.rows.length;

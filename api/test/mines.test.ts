@@ -82,7 +82,7 @@ describe("mines read, update, delete", () => {
 
   it("updates only the fields sent", async () => {
     const { call, id } = await withSite();
-    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "manager-token", body: { target_cost_per_ton: 52 } });
+    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "manager-token", body: { target_cost_per_ton: 52, version: 1 } });
     expect(await res.json()).toMatchObject({ data: { name: "Kriel Plant 2", target_cost_per_ton: 52 } });
   });
 

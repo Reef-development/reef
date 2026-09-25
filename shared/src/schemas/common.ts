@@ -10,3 +10,11 @@ export const ListQuery = z.object({
   order: z.enum(["asc", "desc"]).default("asc"),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
+
+/** The version a client read. Sent with every update so a stale copy cannot overwrite a newer one. */
+export const Version = z.number().int().positive();
+
+/** Turns a patch schema into an update schema that also requires the version the client read. */
+export function versioned<T extends z.ZodObject>(patch: T) {
+  return patch.extend({ version: Version }).strict();
+}
