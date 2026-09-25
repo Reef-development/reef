@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { api, apiListAll } from "@/lib/api";
+import { api, apiListAll, ApiRequestError } from "@/lib/api";
 
 export type TableName =
   | "clients" | "mines" | "equipment" | "suppliers"
@@ -19,7 +19,10 @@ const API_PATHS: Partial<Record<TableName, string>> = {
   mines: "/api/v1/mines",
 };
 
-/** Fields the server owns. They are never sent back on an update. */
+/**
+ * Fields the server owns. They are never sent back on an update. `version` is sent: an update
+ * must carry the version the screen read, and the server refuses it if the record moved on.
+ */
 const SERVER_FIELDS = ["id", "created_at", "updated_at"];
 
 export function useList<T = any>(table: TableName, orderBy = "created_at", asc = false) {
@@ -55,7 +58,11 @@ export function useUpsert(table: TableName) {
       qc.invalidateQueries({ queryKey: [table] });
       toast.success("Saved");
     },
-    onError: (e: any) => toast.error(e.message ?? "Save failed"),
+    onError: (e: any) => {
+      // A conflict is shown inside the edit dialog, next to what the person typed.
+      if (e instanceof ApiRequestError && e.code === "CONFLICT") return;
+      toast.error(e.message ?? "Save failed");
+    },
   });
 }
 
