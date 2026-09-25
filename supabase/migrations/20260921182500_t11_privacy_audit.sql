@@ -41,3 +41,39 @@ TO authenticated
 WITH CHECK (
   user_id = auth.uid()
 );
+
+-- Only owners and managers can update personal information audit records
+CREATE POLICY "Managers can update personal information audit"
+ON public.personal_information_audit
+FOR UPDATE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles ur
+    WHERE ur.user_id = auth.uid()
+      AND ur.role IN ('owner', 'manager')
+  )
+)
+WITH CHECK (
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles ur
+    WHERE ur.user_id = auth.uid()
+      AND ur.role IN ('owner', 'manager')
+  )
+);
+
+-- Only owners and managers can delete personal information audit records
+CREATE POLICY "Managers can delete personal information audit"
+ON public.personal_information_audit
+FOR DELETE
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles ur
+    WHERE ur.user_id = auth.uid()
+      AND ur.role IN ('owner', 'manager')
+  )
+);
