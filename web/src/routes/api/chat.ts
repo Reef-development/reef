@@ -1,8 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { convertToModelMessages, streamText, stepCountIs, tool, type UIMessage } from "ai";
-import { createClient } from "@supabase/supabase-js";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  generateText,
+  stepCountIs,
+  tool,
+  type UIMessage,
+} from "ai";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { verifyAnswer } from "@/lib/reefie/number-proof";
+import { buildFallbackAnswer } from "@/lib/reefie/fallback-template";
+import { isSiteComparisonRequest, SITE_COMPARISON_REFUSAL } from "@/lib/reefie/site-guard";
 
 type ChatBody = { messages?: unknown; threadId?: unknown };
 
@@ -22,10 +33,72 @@ Rules:
 - If data is missing, say so plainly and suggest what to capture.`;
 
 function userClient(token: string) {
-  return createClient(process.env["SUPABASE_URL"]!, process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_ANON_KEY"]!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${token}` } },
+  return createClient(
+    process.env["SUPABASE_URL"]!,
+    process.env["SUPABASE_PUBLISHABLE_KEY"] ?? process.env["SUPABASE_ANON_KEY"]!,
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    },
+  );
+}
+
+/**
+ * T9: builds the client-facing response from an already-decided final answer.
+ *
+ * The answer is sent as a single text part rather than token-by-token. That's a deliberate
+ * trade against the old behaviour: T9 requires that a bad draft never reaches the user at all,
+ * which only works if nothing is sent to the client until the number check has already run.
+ * Live token streaming and "never show an unverified draft" aren't both possible at once — this
+ * picks correctness. If that trade isn't acceptable, the alternative is to keep live streaming
+ * and drop the "throw the answer away" requirement to "warn after the fact", which is a
+ * different task. Worth a conscious call from whoever signs T9 off, not something to leave
+ * implicit.
+ */
+function respondWithFinalText(
+  finalText: string,
+  opts: {
+    uiMessages: UIMessage[];
+    supabase: SupabaseClient;
+    threadId: string;
+    userId: string;
+    numberCheck: { passed: boolean; unverifiedNumbers: number[] } | null;
+  },
+) {
+  const stream = createUIMessageStream({
+    originalMessages: opts.uiMessages,
+    execute: ({ writer }) => {
+      const id = "reefie-answer";
+      writer.write({ type: "text-start", id });
+      writer.write({ type: "text-delta", id, delta: finalText });
+      writer.write({ type: "text-end", id });
+    },
+    onFinish: async ({ responseMessage }) => {
+      const { error } = await opts.supabase.from("reefie_messages").insert({
+        thread_id: opts.threadId,
+        user_id: opts.userId,
+        role: "assistant",
+        message: responseMessage as unknown as Record<string, unknown>,
+      });
+      if (error) console.error("reefie: failed to save assistant message", error);
+      await opts.supabase
+        .from("reefie_threads")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", opts.threadId);
+
+      if (opts.numberCheck) {
+        const { error: checkError } = await opts.supabase.from("reefie_answer_checks").insert({
+          thread_id: opts.threadId,
+          user_id: opts.userId,
+          passed: opts.numberCheck.passed,
+          unverified_numbers: opts.numberCheck.unverifiedNumbers,
+        });
+        if (checkError) console.error("reefie: failed to log number check", checkError);
+      }
+    },
   });
+
+  return createUIMessageStreamResponse({ stream });
 }
 
 export const Route = createFileRoute("/api/chat")({
@@ -60,6 +133,7 @@ export const Route = createFileRoute("/api/chat")({
         // persist the latest user message
         const uiMessages = messages as UIMessage[];
         const last = uiMessages[uiMessages.length - 1];
+        let lastUserText = "";
         if (last && last.role === "user") {
           const { error } = await supabase.from("reefie_messages").insert({
             thread_id: threadId,
@@ -69,46 +143,89 @@ export const Route = createFileRoute("/api/chat")({
           });
           if (error) console.error("reefie: failed to save user message", error);
 
+          lastUserText = last.parts
+            .map((p) => (p.type === "text" ? p.text : ""))
+            .join(" ")
+            .trim();
+
           if (!thread.title || thread.title === "New conversation") {
-            const text = last.parts
-              .map((p) => (p.type === "text" ? p.text : ""))
-              .join(" ")
-              .trim()
-              .slice(0, 60);
-            if (text) await supabase.from("reefie_threads").update({ title: text }).eq("id", threadId);
+            const text = lastUserText.slice(0, 60);
+            if (text)
+              await supabase.from("reefie_threads").update({ title: text }).eq("id", threadId);
           }
+        }
+
+        // T9 checklist: a manager asking the assistant to compare sites is still refused, before
+        // any data tool runs. See lib/reefie/site-guard.ts — this guard is NEW, not a re-check of
+        // an existing rule; nothing matching it was found anywhere else in the repo.
+        if (lastUserText && isSiteComparisonRequest(lastUserText)) {
+          return respondWithFinalText(SITE_COMPARISON_REFUSAL, {
+            uiMessages,
+            supabase,
+            threadId,
+            userId,
+            numberCheck: null,
+          });
         }
 
         const num = (v: unknown) => Number(v ?? 0);
 
         const tools = {
           inventory_status: tool({
-            description: "Stock levels, items at or below reorder point, total inventory value, and open purchase orders.",
+            description:
+              "Stock levels, items at or below reorder point, total inventory value, and open purchase orders.",
             inputSchema: z.object({}),
             execute: async () => {
               const [{ data: items }, { data: pos }] = await Promise.all([
-                supabase.from("stock_items").select("name, sku, unit, qty_on_hand, reorder_point, reorder_qty, unit_cost"),
-                supabase.from("purchase_orders").select("id, status, total_cost, created_at").order("created_at", { ascending: false }).limit(25),
+                supabase
+                  .from("stock_items")
+                  .select("name, sku, unit, qty_on_hand, reorder_point, reorder_qty, unit_cost"),
+                supabase
+                  .from("purchase_orders")
+                  .select("id, status, total_cost, created_at")
+                  .order("created_at", { ascending: false })
+                  .limit(25),
               ]);
               const list = items ?? [];
               return {
                 total_items: list.length,
-                inventory_value: list.reduce((s, i) => s + num(i.qty_on_hand) * num(i.unit_cost), 0),
+                inventory_value: list.reduce(
+                  (s, i) => s + num(i.qty_on_hand) * num(i.unit_cost),
+                  0,
+                ),
                 low_stock: list.filter((i) => num(i.qty_on_hand) <= num(i.reorder_point)),
                 purchase_orders: pos ?? [],
               };
             },
           }),
           maintenance_status: tool({
-            description: "Recent repairs, maintenance spend, overdue services and equipment wear/life remaining.",
-            inputSchema: z.object({ days: z.number().optional().describe("Look-back window in days, default 90") }),
+            description:
+              "Recent repairs, maintenance spend, overdue services and equipment wear/life remaining.",
+            inputSchema: z.object({
+              days: z.number().optional().describe("Look-back window in days, default 90"),
+            }),
             execute: async ({ days }) => {
               const since = new Date(Date.now() - (days ?? 90) * 864e5).toISOString().slice(0, 10);
               const today = new Date().toISOString().slice(0, 10);
               const [{ data: logs }, { data: equip }, { data: down }] = await Promise.all([
-                supabase.from("maintenance_logs").select("date, description, total_cost, labour_cost, parts_cost, downtime_hours, next_due_date, performed_by, equipment_id").gte("date", since).order("date", { ascending: false }),
-                supabase.from("equipment").select("id, name, type, status, tons_since_install, expected_life_tons, hours_since_install, expected_life_hours, replacement_cost, mine_id"),
-                supabase.from("downtime_events").select("reason, start_time, duration_hours, estimated_cost").gte("start_time", since).order("start_time", { ascending: false }).limit(50),
+                supabase
+                  .from("maintenance_logs")
+                  .select(
+                    "date, description, total_cost, labour_cost, parts_cost, downtime_hours, next_due_date, performed_by, equipment_id",
+                  )
+                  .gte("date", since)
+                  .order("date", { ascending: false }),
+                supabase
+                  .from("equipment")
+                  .select(
+                    "id, name, type, status, tons_since_install, expected_life_tons, hours_since_install, expected_life_hours, replacement_cost, mine_id",
+                  ),
+                supabase
+                  .from("downtime_events")
+                  .select("reason, start_time, duration_hours, estimated_cost")
+                  .gte("start_time", since)
+                  .order("start_time", { ascending: false })
+                  .limit(50),
               ]);
               const eq = equip ?? [];
               return {
@@ -118,28 +235,57 @@ export const Route = createFileRoute("/api/chat")({
                 overdue: (logs ?? []).filter((l) => l.next_due_date && l.next_due_date <= today),
                 equipment: eq.map((e) => ({
                   ...e,
-                  life_used_pct: num(e.expected_life_tons) > 0 ? Math.round((num(e.tons_since_install) / num(e.expected_life_tons)) * 100) : null,
+                  life_used_pct:
+                    num(e.expected_life_tons) > 0
+                      ? Math.round((num(e.tons_since_install) / num(e.expected_life_tons)) * 100)
+                      : null,
                 })),
                 downtime: down ?? [],
               };
             },
           }),
           production_and_costs: tool({
-            description: "Tonnes produced, variable costs (magnetite, overtime, maintenance), static costs and rand-per-ton by month and by mine.",
-            inputSchema: z.object({ months: z.number().optional().describe("Look-back window in months, default 6") }),
+            description:
+              "Tonnes produced, variable costs (magnetite, overtime, maintenance), static costs and rand-per-ton by month and by mine.",
+            inputSchema: z.object({
+              months: z.number().optional().describe("Look-back window in months, default 6"),
+            }),
             execute: async ({ months }) => {
               const from = new Date();
               from.setMonth(from.getMonth() - (months ?? 6));
               const since = from.toISOString().slice(0, 10);
-              const [{ data: prod }, { data: statics }, { data: logs }, { data: mines }, { data: clients }] = await Promise.all([
-                supabase.from("production_logs").select("date, mine_id, tons_produced, magnetite_used, magnetite_cost, overtime_hours, overtime_cost").gte("date", since).order("date", { ascending: false }),
-                supabase.from("static_costs").select("month, mine_id, category, amount").gte("month", since),
-                supabase.from("maintenance_logs").select("date, total_cost, equipment_id").gte("date", since),
-                supabase.from("mines").select("id, name, client_id, team_name, location, target_cost_per_ton, active"),
+              const [
+                { data: prod },
+                { data: statics },
+                { data: logs },
+                { data: mines },
+                { data: clients },
+              ] = await Promise.all([
+                supabase
+                  .from("production_logs")
+                  .select(
+                    "date, mine_id, tons_produced, magnetite_used, magnetite_cost, overtime_hours, overtime_cost",
+                  )
+                  .gte("date", since)
+                  .order("date", { ascending: false }),
+                supabase
+                  .from("static_costs")
+                  .select("month, mine_id, category, amount")
+                  .gte("month", since),
+                supabase
+                  .from("maintenance_logs")
+                  .select("date, total_cost, equipment_id")
+                  .gte("date", since),
+                supabase
+                  .from("mines")
+                  .select("id, name, client_id, team_name, location, target_cost_per_ton, active"),
                 supabase.from("clients").select("id, name, active, contract_revenue_monthly"),
               ]);
               const tons = (prod ?? []).reduce((s, p) => s + num(p.tons_produced), 0);
-              const variable = (prod ?? []).reduce((s, p) => s + num(p.magnetite_cost) + num(p.overtime_cost), 0);
+              const variable = (prod ?? []).reduce(
+                (s, p) => s + num(p.magnetite_cost) + num(p.overtime_cost),
+                0,
+              );
               const maint = (logs ?? []).reduce((s, l) => s + num(l.total_cost), 0);
               const fixed = (statics ?? []).reduce((s, c) => s + num(c.amount), 0);
               return {
@@ -159,7 +305,10 @@ export const Route = createFileRoute("/api/chat")({
         };
 
         const gateway = createLovableAiGatewayProvider(key);
-        const result = streamText({
+
+        // T9: generateText, not streamText. We need the complete answer and the complete set of
+        // tool outputs before anything is allowed to reach the client — see respondWithFinalText.
+        const result = await generateText({
           model: gateway("openai/gpt-5.6-sol"),
           system: SYSTEM,
           messages: await convertToModelMessages(uiMessages),
@@ -168,17 +317,30 @@ export const Route = createFileRoute("/api/chat")({
           providerOptions: { lovable: { reasoningEffort: "none" } },
         });
 
-        return result.toUIMessageStreamResponse({
-          originalMessages: uiMessages,
-          onFinish: async ({ responseMessage }) => {
-            const { error } = await supabase.from("reefie_messages").insert({
-              thread_id: threadId,
-              user_id: userId,
-              role: "assistant",
-              message: responseMessage as unknown as Record<string, unknown>,
-            });
-            if (error) console.error("reefie: failed to save assistant message", error);
-            await supabase.from("reefie_threads").update({ updated_at: new Date().toISOString() }).eq("id", threadId);
+        const toolOutputs = result.toolResults.map((r) => r.output);
+        const check = verifyAnswer(result.text, toolOutputs);
+
+        const finalText = check.ok
+          ? result.text
+          : buildFallbackAnswer(
+              result.toolResults.map((r) => ({ toolName: r.toolName, output: r.output })),
+            );
+
+        if (!check.ok) {
+          console.warn(
+            "reefie: threw away a drafted answer, unverified numbers:",
+            check.badNumbers.map((n) => n.value),
+          );
+        }
+
+        return respondWithFinalText(finalText, {
+          uiMessages,
+          supabase,
+          threadId,
+          userId,
+          numberCheck: {
+            passed: check.ok,
+            unverifiedNumbers: check.ok ? [] : check.badNumbers.map((n) => n.value),
           },
         });
       },
