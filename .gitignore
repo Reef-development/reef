@@ -24,9 +24,14 @@ dist-ssr
 .vscode/*
 !.vscode/extensions.json
 .idea
+.vs/
 .DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Per-app environment files (never commit)
+api/.env
+web/.env
