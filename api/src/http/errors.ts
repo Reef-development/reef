@@ -16,7 +16,10 @@ export function validationError(err: ZodError): ApiError {
   // An unknown field is reported against its own name, so a form can point at it.
   const details = err.issues.flatMap((i) =>
     i.code === "unrecognized_keys"
-      ? i.keys.map((key) => ({ path: [...i.path, key].join("."), message: "This field is not accepted here" }))
+      ? i.keys.map((key) => ({
+          path: [...i.path, key].join("."),
+          message: "This field is not accepted here",
+        }))
       : [{ path: i.path.join("."), message: i.message }],
   );
   return new ApiError("VALIDATION_FAILED", "Some fields are missing or invalid", details);

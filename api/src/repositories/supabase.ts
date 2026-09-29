@@ -105,18 +105,20 @@ export class SupabaseRoleRepository implements RoleRepository {
 }
 
 /** Creating a repair goes through create_maintenance_log, so the log and its parts land together. */
-export class SupabaseMaintenanceRepository<Input extends { parts?: unknown[] }, Patch> extends SupabaseTableRepository<
-  Row,
-  Input,
-  Patch
-> {
+export class SupabaseMaintenanceRepository<
+  Input extends { parts?: unknown[] },
+  Patch,
+> extends SupabaseTableRepository<Row, Input, Patch> {
   constructor(private readonly client: SupabaseClient) {
     super(client, "maintenance_logs", "date");
   }
 
   override async create(input: Input): Promise<Row> {
     const { parts = [], ...log } = input;
-    const { data, error } = await this.client.rpc("create_maintenance_log", { _log: log, _parts: parts });
+    const { data, error } = await this.client.rpc("create_maintenance_log", {
+      _log: log,
+      _parts: parts,
+    });
     if (error) throw translate(error);
     return data as Row;
   }
@@ -135,7 +137,10 @@ export class SupabaseMaintenanceParts implements MaintenancePartsRepository {
     return (data ?? []) as Row[];
   }
 
-  async add(logId: string, part: { stock_item_id: string; qty: number; unit_cost?: number }): Promise<Row> {
+  async add(
+    logId: string,
+    part: { stock_item_id: string; qty: number; unit_cost?: number },
+  ): Promise<Row> {
     const { data, error } = await this.db
       .from("maintenance_parts")
       .insert({ maintenance_id: logId, ...part })
@@ -146,7 +151,11 @@ export class SupabaseMaintenanceParts implements MaintenancePartsRepository {
   }
 
   async remove(partId: string): Promise<boolean> {
-    const { data, error } = await this.db.from("maintenance_parts").delete().eq("id", partId).select("id");
+    const { data, error } = await this.db
+      .from("maintenance_parts")
+      .delete()
+      .eq("id", partId)
+      .select("id");
     if (error) throw translate(error);
     return (data ?? []).length > 0;
   }
@@ -156,7 +165,10 @@ export class SupabaseStockUsage implements StockUsageRepository {
   constructor(private readonly db: SupabaseClient) {}
 
   async recordUsage(stockItemId: string, qty: number): Promise<Row> {
-    const { data, error } = await this.db.rpc("record_stock_usage", { _item: stockItemId, _qty: qty });
+    const { data, error } = await this.db.rpc("record_stock_usage", {
+      _item: stockItemId,
+      _qty: qty,
+    });
     if (error) throw translate(error);
     return data as Row;
   }

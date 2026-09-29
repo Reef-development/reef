@@ -11,9 +11,13 @@ beforeAll(async () => {
   db = await migratedDb();
   worker = await db.user("worker");
   manager = await db.user("manager");
-  const eq = await db.query<{ id: string }>("INSERT INTO equipment (name) VALUES ('Screen 3') RETURNING id");
+  const eq = await db.query<{ id: string }>(
+    "INSERT INTO equipment (name) VALUES ('Screen 3') RETURNING id",
+  );
   equipmentId = eq.rows[0].id;
-  const sup = await db.query<{ id: string }>("INSERT INTO suppliers (name) VALUES ('Bearings SA') RETURNING id");
+  const sup = await db.query<{ id: string }>(
+    "INSERT INTO suppliers (name) VALUES ('Bearings SA') RETURNING id",
+  );
   const item = await db.query<{ id: string }>(
     `INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, supplier_id)
      VALUES ('Bearing 6205', 10, 4, 20, 150, $1) RETURNING id`,
@@ -23,7 +27,10 @@ beforeAll(async () => {
 }, 60_000);
 
 const qty = async (id: string) =>
-  Number((await db.query<{ q: string }>("SELECT qty_on_hand q FROM stock_items WHERE id = $1", [id])).rows[0].q);
+  Number(
+    (await db.query<{ q: string }>("SELECT qty_on_hand q FROM stock_items WHERE id = $1", [id]))
+      .rows[0].q,
+  );
 
 describe("fuel slip totals", () => {
   it("works out the total from litres and price, ignoring any total the client sends", async () => {
@@ -54,7 +61,11 @@ describe("a repair and its parts, saved together", () => {
       tx.query<{ parts_cost: string; total_cost: string; logged_by: string }>(
         "SELECT * FROM create_maintenance_log($1, $2)",
         [
-          JSON.stringify({ equipment_id: equipmentId, description: "Replaced drive bearing", labour_cost: 400 }),
+          JSON.stringify({
+            equipment_id: equipmentId,
+            description: "Replaced drive bearing",
+            labour_cost: 400,
+          }),
           JSON.stringify([{ stock_item_id: bearingId, qty: 2 }]),
         ],
       ),
@@ -66,13 +77,17 @@ describe("a repair and its parts, saved together", () => {
   });
 
   it("saves nothing at all if one part is bad", async () => {
-    const count = async () => Number((await db.query<{ n: string }>("SELECT count(*) n FROM maintenance_logs")).rows[0].n);
+    const count = async () =>
+      Number((await db.query<{ n: string }>("SELECT count(*) n FROM maintenance_logs")).rows[0].n);
     const before = await count();
     await expect(
       db.as(worker, (tx) =>
         tx.query("SELECT * FROM create_maintenance_log($1, $2)", [
           JSON.stringify({ equipment_id: equipmentId, description: "Half a repair" }),
-          JSON.stringify([{ stock_item_id: bearingId, qty: 1 }, { stock_item_id: "not-a-uuid", qty: 1 }]),
+          JSON.stringify([
+            { stock_item_id: bearingId, qty: 1 },
+            { stock_item_id: "not-a-uuid", qty: 1 },
+          ]),
         ]),
       ),
     ).rejects.toThrow();
@@ -82,7 +97,11 @@ describe("a repair and its parts, saved together", () => {
   it("records the caller as the person who logged it, whatever the client claims", async () => {
     const { rows } = await db.as(worker, (tx) =>
       tx.query<{ logged_by: string }>("SELECT * FROM create_maintenance_log($1)", [
-        JSON.stringify({ equipment_id: equipmentId, description: "Greased rollers", logged_by: manager }),
+        JSON.stringify({
+          equipment_id: equipmentId,
+          description: "Greased rollers",
+          logged_by: manager,
+        }),
       ]),
     );
     expect(rows[0].logged_by).toBe(worker);
@@ -91,12 +110,18 @@ describe("a repair and its parts, saved together", () => {
   it("puts a removed part back on the shelf and takes it off the repair's cost", async () => {
     const log = await db.as(manager, (tx) =>
       tx.query<{ id: string }>("SELECT * FROM create_maintenance_log($1, $2)", [
-        JSON.stringify({ equipment_id: equipmentId, description: "Wrong bearing fitted", labour_cost: 100 }),
+        JSON.stringify({
+          equipment_id: equipmentId,
+          description: "Wrong bearing fitted",
+          labour_cost: 100,
+        }),
         JSON.stringify([{ stock_item_id: bearingId, qty: 1 }]),
       ]),
     );
     const before = await qty(bearingId);
-    await db.as(manager, (tx) => tx.query("DELETE FROM maintenance_parts WHERE maintenance_id = $1", [log.rows[0].id]));
+    await db.as(manager, (tx) =>
+      tx.query("DELETE FROM maintenance_parts WHERE maintenance_id = $1", [log.rows[0].id]),
+    );
     expect(await qty(bearingId)).toBe(before + 1);
     const after = await db.query<{ parts_cost: string; total_cost: string }>(
       "SELECT parts_cost, total_cost FROM maintenance_logs WHERE id = $1",
@@ -131,7 +156,10 @@ describe("stock usage", () => {
     const id = item.rows[0].id;
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
-    const n = await db.query<{ n: string }>("SELECT count(*) n FROM po_lines WHERE stock_item_id = $1", [id]);
+    const n = await db.query<{ n: string }>(
+      "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
+      [id],
+    );
     expect(Number(n.rows[0].n)).toBe(1);
   });
 
@@ -148,40 +176,54 @@ describe("stock usage", () => {
   });
 
   it("refuses zero or negative quantities", async () => {
-    await expect(db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 0)", [bearingId]))).rejects.toThrow(
-      /more than zero/,
-    );
+    await expect(
+      db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 0)", [bearingId])),
+    ).rejects.toThrow(/more than zero/);
   });
 
   it("names an unknown item clearly", async () => {
     await expect(
-      db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", ["00000000-0000-4000-8000-000000000999"])),
+      db.as(worker, (tx) =>
+        tx.query("SELECT record_stock_usage($1, 1)", ["00000000-0000-4000-8000-000000000999"]),
+      ),
     ).rejects.toThrow(/No such stock item/);
   });
 
   it("refuses someone with no role", async () => {
-    const stranger = (await db.query<{ id: string }>("INSERT INTO auth.users (email) VALUES ('x@test.local') RETURNING id")).rows[0].id;
+    const stranger = (
+      await db.query<{ id: string }>(
+        "INSERT INTO auth.users (email) VALUES ('x@test.local') RETURNING id",
+      )
+    ).rows[0].id;
     await db.query("DELETE FROM user_roles WHERE user_id = $1", [stranger]);
-    await expect(db.as(stranger, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [bearingId]))).rejects.toThrow(
-      /no role/,
-    );
+    await expect(
+      db.as(stranger, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [bearingId])),
+    ).rejects.toThrow(/no role/);
   });
 });
 
 describe("T8 versions, in the real database", () => {
   it("raises the version on update and ignores a version the client tries to set", async () => {
-    const m = await db.query<{ id: string; version: number }>("INSERT INTO mines (name) VALUES ('Kriel') RETURNING id, version");
+    const m = await db.query<{ id: string; version: number }>(
+      "INSERT INTO mines (name) VALUES ('Kriel') RETURNING id, version",
+    );
     expect(m.rows[0].version).toBe(1);
-    const u = await db.query<{ version: number }>("UPDATE mines SET name = 'Kriel 2', version = 99 WHERE id = $1 RETURNING version", [
-      m.rows[0].id,
-    ]);
+    const u = await db.query<{ version: number }>(
+      "UPDATE mines SET name = 'Kriel 2', version = 99 WHERE id = $1 RETURNING version",
+      [m.rows[0].id],
+    );
     expect(u.rows[0].version).toBe(2);
   });
 
   it("matches no row when the version is out of date, which is what the API turns into 409", async () => {
-    const m = await db.query<{ id: string }>("INSERT INTO mines (name) VALUES ('Ogies') RETURNING id");
+    const m = await db.query<{ id: string }>(
+      "INSERT INTO mines (name) VALUES ('Ogies') RETURNING id",
+    );
     await db.query("UPDATE mines SET location = 'A' WHERE id = $1 AND version = 1", [m.rows[0].id]);
-    const second = await db.query("UPDATE mines SET location = 'B' WHERE id = $1 AND version = 1 RETURNING id", [m.rows[0].id]);
+    const second = await db.query(
+      "UPDATE mines SET location = 'B' WHERE id = $1 AND version = 1 RETURNING id",
+      [m.rows[0].id],
+    );
     expect(second.rows).toHaveLength(0);
   });
 });

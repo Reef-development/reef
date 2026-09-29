@@ -48,7 +48,9 @@ export type Db = PGlite & {
 export async function migratedDb(): Promise<Db> {
   const pg = new PGlite();
   await pg.exec(SUPABASE_STUBS);
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
+  for (const file of readdirSync(MIGRATIONS)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()) {
     try {
       await pg.exec(readFileSync(MIGRATIONS + file, "utf8"));
     } catch (err) {

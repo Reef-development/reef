@@ -92,7 +92,10 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: base,
       access: spec.create ?? spec.write,
       summary: spec.summaries.create,
-      refuses: ["Missing or invalid fields, and any field it does not recognise.", spec.createRefuses]
+      refuses: [
+        "Missing or invalid fields, and any field it does not recognise.",
+        spec.createRefuses,
+      ]
         .filter(Boolean)
         .join(" "),
     },

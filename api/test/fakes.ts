@@ -53,7 +53,14 @@ export class MemoryTable<R extends AnyRow> implements Repository<R, object, obje
   }
   async create(input: object) {
     const now = new Date().toISOString();
-    const row = { id: randomUUID(), version: 1, created_at: now, updated_at: now, ...this.defaults, ...input } as unknown as R;
+    const row = {
+      id: randomUUID(),
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...this.defaults,
+      ...input,
+    } as unknown as R;
     this.derive(row);
     this.rows.push(row);
     return { ...row };
@@ -77,7 +84,13 @@ export class MemoryTable<R extends AnyRow> implements Repository<R, object, obje
 
 export class MemoryMines extends MemoryTable<Mine & AnyRow> {
   constructor() {
-    super({ client_id: null, location: null, team_name: null, target_cost_per_ton: null, active: true });
+    super({
+      client_id: null,
+      location: null,
+      team_name: null,
+      target_cost_per_ton: null,
+      active: true,
+    });
   }
 }
 
@@ -96,7 +109,9 @@ export class MemoryMaintenance extends MemoryTable<AnyRow> {
   }
 
   override async create(input: object) {
-    const { parts = [], ...log } = input as { parts?: { stock_item_id: string; qty: number; unit_cost?: number }[] };
+    const { parts = [], ...log } = input as {
+      parts?: { stock_item_id: string; qty: number; unit_cost?: number }[];
+    };
     const row = await super.create(log);
     for (const p of parts) this.addPart(row.id, p);
     return (await this.get(row.id))!;
@@ -105,7 +120,12 @@ export class MemoryMaintenance extends MemoryTable<AnyRow> {
   addPart(logId: string, p: { stock_item_id: string; qty: number; unit_cost?: number }) {
     const known = Object.values(STOCK).find((s) => s.id === p.stock_item_id);
     if (!known) throw new ApiError("NOT_FOUND", "That stock item does not exist");
-    const part = { id: randomUUID(), maintenance_id: logId, ...p, unit_cost: p.unit_cost || known.unit_cost };
+    const part = {
+      id: randomUUID(),
+      maintenance_id: logId,
+      ...p,
+      unit_cost: p.unit_cost || known.unit_cost,
+    };
     this.parts.push(part);
     this.refresh(logId);
     return part;
@@ -114,7 +134,9 @@ export class MemoryMaintenance extends MemoryTable<AnyRow> {
   refresh(logId: string) {
     const log = this.rows.find((r) => r.id === logId);
     if (!log) return;
-    log.parts_cost = this.parts.filter((p) => p.maintenance_id === logId).reduce((s, p) => s + p.qty * p.unit_cost, 0);
+    log.parts_cost = this.parts
+      .filter((p) => p.maintenance_id === logId)
+      .reduce((s, p) => s + p.qty * p.unit_cost, 0);
     log.total_cost = Number(log.labour_cost ?? 0) + Number(log.parts_cost);
   }
 }
@@ -153,7 +175,8 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       photoRequests.push(path);
       return { signedUrl: `https://storage.test/upload/${path}`, token: "upload-token" };
     },
-    viewUrl: async (path) => (path.includes("forbidden") ? null : `https://storage.test/view/${path}`),
+    viewUrl: async (path) =>
+      path.includes("forbidden") ? null : `https://storage.test/view/${path}`,
   };
 
   const logged: unknown[] = [];
@@ -193,5 +216,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, production, fuel, maintenance, usage, photoRequests, logged, call };
+  return {
+    app,
+    registry,
+    mines,
+    production,
+    fuel,
+    maintenance,
+    usage,
+    photoRequests,
+    logged,
+    call,
+  };
 }

@@ -41,8 +41,10 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
     summaries: {
       list: "Lists tonnage captured per site and shift, newest first by default. Feeds the cost-per-ton figures.",
       get: "Returns one production entry.",
-      create: "Captures tons produced for a site. Every role may capture, because workers record output on the plant.",
-      update: "Corrects a production entry. Managers and owners only, because it changes cost per ton after the fact.",
+      create:
+        "Captures tons produced for a site. Every role may capture, because workers record output on the plant.",
+      update:
+        "Corrects a production entry. Managers and owners only, because it changes cost per ton after the fact.",
       remove: "Deletes a production entry captured in error. Managers and owners only.",
     },
     createRefuses: "A negative tonnage or a site id that is not a UUID.",
@@ -68,7 +70,8 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       update: "Corrects a fuel slip; the total is recalculated. Managers and owners only.",
       remove: "Deletes a fuel slip. Owners only, because slips are evidence for fuel spend.",
     },
-    createRefuses: "Zero litres, a total_cost field, a photo path this system did not issue, or neither a vehicle nor a label.",
+    createRefuses:
+      "Zero litres, a total_cost field, a photo path this system did not issue, or neither a vehicle nor a label.",
   });
 
   resourceRoutes(app, registry, {
@@ -86,10 +89,12 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       get: "Returns one repair.",
       create:
         "Logs a repair and the parts it used in one step: either all of it is saved or none. Stock comes off, a reorder is drafted if an item runs low, and the caller is recorded as the person who logged it.",
-      update: "Corrects a repair's details. Parts change through their own endpoints. Managers and owners only.",
+      update:
+        "Corrects a repair's details. Parts change through their own endpoints. Managers and owners only.",
       remove: "Deletes a repair logged in error. Managers and owners only.",
     },
-    createRefuses: "A missing description or equipment, a cost field (costs are worked out from labour and parts), or more than 50 parts.",
+    createRefuses:
+      "A missing description or equipment, a cost field (costs are worked out from labour and parts), or more than 50 parts.",
   });
 
   defineRoute(
@@ -115,13 +120,16 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       method: "POST",
       path: "/api/v1/maintenance-logs/:id/parts",
       access: "maintenance:write",
-      summary: "Adds a part to a repair already logged. Stock comes off and the repair's cost goes up.",
-      refuses: "A zero quantity, or a repair or stock item that does not exist. Managers and owners only.",
+      summary:
+        "Adds a part to a repair already logged. Stock comes off and the repair's cost goes up.",
+      refuses:
+        "A zero quantity, or a repair or stock item that does not exist. Managers and owners only.",
     },
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
       const part = await parseBody(c, MaintenancePartInput);
-      if (!(await c.var.repos.maintenance.get(id))) throw new ApiError("NOT_FOUND", "That repair does not exist");
+      if (!(await c.var.repos.maintenance.get(id)))
+        throw new ApiError("NOT_FOUND", "That repair does not exist");
       return ok(c, await c.var.repos.maintenanceParts.add(id, part), 201);
     },
   );
@@ -133,12 +141,14 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       method: "DELETE",
       path: "/api/v1/maintenance-parts/:id",
       access: "maintenance:write",
-      summary: "Removes a part logged against a repair in error. It goes back on the shelf and off the repair's cost.",
+      summary:
+        "Removes a part logged against a repair in error. It goes back on the shelf and off the repair's cost.",
       refuses: "A part that does not exist. Managers and owners only.",
     },
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
-      if (!(await c.var.repos.maintenanceParts.remove(id))) throw new ApiError("NOT_FOUND", "That part does not exist");
+      if (!(await c.var.repos.maintenanceParts.remove(id)))
+        throw new ApiError("NOT_FOUND", "That part does not exist");
       return ok(c, { id, deleted: true });
     },
   );

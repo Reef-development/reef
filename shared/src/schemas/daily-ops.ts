@@ -11,7 +11,10 @@ const text = (max: number) => z.string().trim().max(max).nullable().optional();
 export const PHOTO_FOLDERS = ["repairs", "fuel", "downtime"] as const;
 export const PhotoPath = z
   .string()
-  .regex(/^(repairs|fuel|downtime)\/[0-9a-f-]{36}\/[\w.-]{1,80}$/, "Not a photo this system stored");
+  .regex(
+    /^(repairs|fuel|downtime)\/[0-9a-f-]{36}\/[\w.-]{1,80}$/,
+    "Not a photo this system stored",
+  );
 const photos = z.array(PhotoPath).max(10, "At most 10 photos").optional();
 
 // ---------------------------------------------------------------- production logs
@@ -25,7 +28,11 @@ export const ProductionInput = z
     tons_produced: amount,
     magnetite_used: amount.optional(),
     magnetite_cost: money.optional(),
-    overtime_hours: z.number().nonnegative().max(24 * 31).optional(),
+    overtime_hours: z
+      .number()
+      .nonnegative()
+      .max(24 * 31)
+      .optional(),
     overtime_cost: money.optional(),
     notes: text(1000),
   })
@@ -117,7 +124,10 @@ export type StockUsageInput = z.infer<typeof StockUsageInput>;
 export const PhotoUploadInput = z
   .object({
     folder: z.enum(PHOTO_FOLDERS),
-    content_type: z.enum(["image/jpeg", "image/png", "image/webp"], "Only JPEG, PNG or WebP photos"),
+    content_type: z.enum(
+      ["image/jpeg", "image/png", "image/webp"],
+      "Only JPEG, PNG or WebP photos",
+    ),
   })
   .strict();
 export type PhotoUploadInput = z.infer<typeof PhotoUploadInput>;

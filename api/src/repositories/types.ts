@@ -34,7 +34,10 @@ export type Row = Record<string, unknown> & { id: string };
 export interface MaintenancePartsRepository {
   forLog(logId: string): Promise<Row[]>;
   /** Adds a part to an existing repair; stock and the repair's cost update in the database. */
-  add(logId: string, part: { stock_item_id: string; qty: number; unit_cost?: number }): Promise<Row>;
+  add(
+    logId: string,
+    part: { stock_item_id: string; qty: number; unit_cost?: number },
+  ): Promise<Row>;
   /** Removes a part; it goes back on the shelf. False if there was no such part. */
   remove(partId: string): Promise<boolean>;
 }
