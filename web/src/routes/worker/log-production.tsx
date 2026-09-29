@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useList } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,12 +23,10 @@ function Page() {
     mutationFn: async () => {
       if (!mineId) throw new Error("Select mine");
       if (tons <= 0) throw new Error("Enter tons produced");
-      const { error } = await supabase.from("production_logs").insert({
-        mine_id: mineId,
-        date: new Date().toISOString().slice(0, 10),
-        tons_produced: tons,
+      await api("/api/v1/production-logs", {
+        method: "POST",
+        body: JSON.stringify({ mine_id: mineId, date: new Date().toISOString().slice(0, 10), tons_produced: tons }),
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["production_logs"] });

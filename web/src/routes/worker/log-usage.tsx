@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useList, NUM } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -23,14 +23,13 @@ function Page() {
     mutationFn: async () => {
       if (!itemId) throw new Error("Select an item");
       if (qty <= 0) throw new Error("Enter a quantity");
-      const item = stock.data?.find((s: any) => s.id === itemId);
-      if (!item) throw new Error("Item not found");
-      const newQty = Number(item.qty_on_hand) - qty;
-      const { error } = await supabase.from("stock_items").update({ qty_on_hand: newQty }).eq("id", itemId);
-      if (error) throw error;
+      // One server-side step: the quantity comes off in the database, so two people recording at
+      // once both count, and a reorder is drafted if the item runs low.
+      await api("/api/v1/stock-usage", { method: "POST", body: JSON.stringify({ stock_item_id: itemId, qty }) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["stock_items"] });
+      qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       toast.success("Usage logged");
       navigate({ to: "/worker" });
     },

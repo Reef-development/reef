@@ -43,7 +43,7 @@ const fuelFields = {
   equipment_id: Id.nullable().optional(),
   vehicle_label: text(80),
   slip_no: text(40),
-  fuel_type: z.enum(["diesel", "petrol", "paraffin"]).optional(),
+  fuel_type: z.enum(["diesel", "petrol", "oil", "other"]).optional(),
   litres: z.number().positive("Enter the litres pumped").max(100_000),
   cost_per_litre: z.number().nonnegative().max(1_000),
   odometer: z.number().nonnegative().nullable().optional(),
