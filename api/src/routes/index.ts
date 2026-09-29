@@ -3,6 +3,7 @@ import { MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
+import { dailyOpsRoutes } from "./daily-ops.js";
 import { defineRoute } from "./define.js";
 import { resourceRoutes } from "./resource.js";
 
@@ -53,4 +54,6 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
         "Deletes a site. Its production logs go with it; equipment and staff are unlinked, not deleted.",
     },
   });
+
+  dailyOpsRoutes(app, registry);
 }

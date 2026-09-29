@@ -21,8 +21,17 @@ type ResourceSpec = {
   patch: ZodObject;
   sortable: readonly string[];
   read: Permission;
+  /** Update, and create/delete unless those are given separately. */
   write: Permission;
+  /** Who may add a record, when that is wider than `write` (e.g. workers capturing entries). */
+  create?: Permission;
+  /** Who may delete, when that is narrower than `write`. */
+  remove?: Permission;
+  /** A column the API fills with the caller's id on create, e.g. `logged_by`. Never the client. */
+  stampUser?: string;
   summaries: { list: string; get: string; create: string; update: string; remove: string };
+  /** Extra refusal reasons for create, beyond the generic validation ones. */
+  createRefuses?: string;
 };
 
 /**
@@ -81,12 +90,15 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
     {
       method: "POST",
       path: base,
-      access: spec.write,
+      access: spec.create ?? spec.write,
       summary: spec.summaries.create,
-      refuses: "Missing or invalid fields, and any field it does not recognise.",
+      refuses: ["Missing or invalid fields, and any field it does not recognise.", spec.createRefuses]
+        .filter(Boolean)
+        .join(" "),
     },
     async (c) => {
       const body = await parseBody(c, spec.input);
+      if (spec.stampUser) (body as Record<string, unknown>)[spec.stampUser] = c.var.user.id;
       const row = await spec.repo(c.var.repos).create(body);
       return ok(c, row, 201);
     },
@@ -130,7 +142,7 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
     {
       method: "DELETE",
       path: `${base}/:id`,
-      access: spec.write,
+      access: spec.remove ?? spec.write,
       summary: spec.summaries.remove,
       refuses: "A record that does not exist, or one that other records still point to.",
     },
