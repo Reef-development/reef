@@ -13,7 +13,10 @@ function translate(err: PgError): ApiError {
     case "23505":
       return new ApiError("CONFLICT", "A record with these details already exists");
     case "23503":
-      return new ApiError("CONFLICT", "This record is linked to another record that does not exist or still uses it");
+      return new ApiError(
+        "CONFLICT",
+        "This record is linked to another record that does not exist or still uses it",
+      );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
     default:
@@ -46,7 +49,11 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
   }
 
   async create(input: Input): Promise<Row> {
-    const { data, error } = await this.db.from(this.table).insert(input as object).select().single();
+    const { data, error } = await this.db
+      .from(this.table)
+      .insert(input as object)
+      .select()
+      .single();
     if (error) throw translate(error);
     return data as Row;
   }

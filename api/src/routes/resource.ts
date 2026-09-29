@@ -33,7 +33,8 @@ type ResourceSpec = {
 export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: ResourceSpec) {
   const base = `/api/v1/${spec.name}`;
   const Update = versioned(spec.patch);
-  const notFound = () => new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+  const notFound = () =>
+    new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
   const Query = ListQuery.refine((q) => !q.sort || spec.sortable.includes(q.sort), {
     message: `Sort by one of: ${spec.sortable.join(", ")}`,
     path: ["sort"],
@@ -106,7 +107,10 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
       // The schema is built per resource, so TypeScript only knows it adds `version: number`.
-      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<string, unknown>;
+      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<
+        string,
+        unknown
+      >;
       const result = await spec.repo(c.var.repos).update(id, changes, version);
       if (result.status === "missing") throw notFound();
       if (result.status === "stale") {

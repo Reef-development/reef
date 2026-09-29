@@ -88,7 +88,12 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
         ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
-      body: opts.body === undefined ? undefined : typeof opts.body === "string" ? opts.body : JSON.stringify(opts.body),
+      body:
+        opts.body === undefined
+          ? undefined
+          : typeof opts.body === "string"
+            ? opts.body
+            : JSON.stringify(opts.body),
     });
 
   return { app, registry, mines, logged, call };

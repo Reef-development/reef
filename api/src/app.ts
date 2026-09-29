@@ -60,7 +60,10 @@ export function createApp(deps: Deps) {
     (deps.log ?? console.error)(`${c.req.method} ${c.req.path} failed`, err);
     return fail(
       c,
-      new ApiError("INTERNAL", "Something went wrong on our side. Try again, and tell the site manager if it keeps happening"),
+      new ApiError(
+        "INTERNAL",
+        "Something went wrong on our side. Try again, and tell the site manager if it keeps happening",
+      ),
     );
   });
 

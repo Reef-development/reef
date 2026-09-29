@@ -13,7 +13,10 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   try {
     ({ userId } = await c.var.deps.verifyToken(token));
   } catch {
-    throw new ApiError("UNAUTHENTICATED", "Your session has expired or is not valid. Sign in again");
+    throw new ApiError(
+      "UNAUTHENTICATED",
+      "Your session has expired or is not valid. Sign in again",
+    );
   }
 
   const repos = c.var.deps.repositories(token);

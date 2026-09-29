@@ -3,7 +3,10 @@ import { testApp } from "./fakes.js";
 
 async function withSite() {
   const t = testApp();
-  const res = await t.call("POST", "/api/v1/mines", { token: "owner-token", body: { name: "Kriel Plant 2" } });
+  const res = await t.call("POST", "/api/v1/mines", {
+    token: "owner-token",
+    body: { name: "Kriel Plant 2" },
+  });
   const { data } = await res.json();
   return { ...t, id: data.id as string };
 }
@@ -17,17 +20,28 @@ describe("T8: every record carries a version", () => {
 
   it("raises the version by one on each successful change", async () => {
     const { call, id } = await withSite();
-    const first = await call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { location: "Kriel", version: 1 } });
+    const first = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { location: "Kriel", version: 1 },
+    });
     expect(await first.json()).toMatchObject({ data: { version: 2 } });
-    const second = await call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { team_name: "Alpha", version: 2 } });
-    expect(await second.json()).toMatchObject({ data: { version: 3, location: "Kriel", team_name: "Alpha" } });
+    const second = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { team_name: "Alpha", version: 2 },
+    });
+    expect(await second.json()).toMatchObject({
+      data: { version: 3, location: "Kriel", team_name: "Alpha" },
+    });
   });
 });
 
 describe("T8: a change from an out-of-date copy is refused", () => {
   it("refuses a change with no version at all", async () => {
     const { call, id } = await withSite();
-    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { location: "Kriel" } });
+    const res = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { location: "Kriel" },
+    });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.details).toContainEqual(expect.objectContaining({ path: "version" }));
@@ -35,9 +49,15 @@ describe("T8: a change from an out-of-date copy is refused", () => {
 
   it("refuses an old version with 409, says why, and sends back the current copy", async () => {
     const { call, id, mines } = await withSite();
-    await call("PATCH", `/api/v1/mines/${id}`, { token: "manager-token", body: { location: "Ogies", version: 1 } });
+    await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "manager-token",
+      body: { location: "Ogies", version: 1 },
+    });
 
-    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { location: "Kriel", version: 1 } });
+    const res = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { location: "Kriel", version: 1 },
+    });
     expect(res.status).toBe(409);
     const body = await res.json();
     expect(body.error.code).toBe("CONFLICT");
@@ -48,16 +68,23 @@ describe("T8: a change from an out-of-date copy is refused", () => {
 
   it("does not let a client choose its own version number", async () => {
     const { call, id, mines } = await withSite();
-    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { location: "Kriel", version: 99 } });
+    const res = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { location: "Kriel", version: 99 },
+    });
     expect(res.status).toBe(409);
     expect(mines.rows[0].version).toBe(1);
   });
 
   it("answers 404, not 409, when the record no longer exists", async () => {
-    const res = await testApp().call("PATCH", "/api/v1/mines/00000000-0000-4000-8000-00000000abcd", {
-      token: "owner-token",
-      body: { location: "Kriel", version: 1 },
-    });
+    const res = await testApp().call(
+      "PATCH",
+      "/api/v1/mines/00000000-0000-4000-8000-00000000abcd",
+      {
+        token: "owner-token",
+        body: { location: "Kriel", version: 1 },
+      },
+    );
     expect(res.status).toBe(404);
   });
 });
@@ -68,8 +95,14 @@ describe("T8: two people saving at the same moment", () => {
 
     // Both opened the record at version 1 and press save together.
     const [a, b] = await Promise.all([
-      call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { location: "Kriel", version: 1 } }),
-      call("PATCH", `/api/v1/mines/${id}`, { token: "manager-token", body: { location: "Ogies", version: 1 } }),
+      call("PATCH", `/api/v1/mines/${id}`, {
+        token: "owner-token",
+        body: { location: "Kriel", version: 1 },
+      }),
+      call("PATCH", `/api/v1/mines/${id}`, {
+        token: "manager-token",
+        body: { location: "Ogies", version: 1 },
+      }),
     ]);
 
     expect([a.status, b.status].sort()).toEqual([200, 409]);
@@ -80,7 +113,10 @@ describe("T8: two people saving at the same moment", () => {
   it("still refuses all but one when five people save at once", async () => {
     const { call, id } = await withSite();
     const saves = ["A", "B", "C", "D", "E"].map((team) =>
-      call("PATCH", `/api/v1/mines/${id}`, { token: "owner-token", body: { team_name: team, version: 1 } }),
+      call("PATCH", `/api/v1/mines/${id}`, {
+        token: "owner-token",
+        body: { team_name: team, version: 1 },
+      }),
     );
     const statuses = (await Promise.all(saves)).map((r) => r.status);
     expect(statuses.filter((s) => s === 200)).toHaveLength(1);

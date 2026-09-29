@@ -6,7 +6,10 @@ export const Id = z.uuid();
 export const ListQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
-  sort: z.string().regex(/^[a-z_]+$/).optional(),
+  sort: z
+    .string()
+    .regex(/^[a-z_]+$/)
+    .optional(),
   order: z.enum(["asc", "desc"]).default("asc"),
 });
 export type ListQuery = z.infer<typeof ListQuery>;
