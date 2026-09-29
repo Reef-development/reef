@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+      - develop
       - "feature/**"
   pull_request:
     branches:
       - main
+      - develop
 
 jobs:
 
@@ -100,6 +102,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      # Was missing: without it eslint is not installed and the job fails before linting.
+      - name: Install dependencies
+        run: npm ci
+
       - name: Run lint
         run: npm run lint
 
@@ -121,6 +127,45 @@ jobs:
 
       - name: API check
         run: npm run api:check
+
+  # New: the delivered back end in api/. Builds shared/ first because api/ depends on it by
+  # path, then runs the API's typecheck, its test suite (including the SQL tests against a
+  # real in-process Postgres) and the check that docs/api-endpoints.md matches the code.
+  api-tests:
+    name: API Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            shared/package-lock.json
+            api/package-lock.json
+
+      - name: Build shared
+        working-directory: shared
+        run: npm ci && npm run build
+
+      - name: Install API dependencies
+        working-directory: api
+        run: npm ci
+
+      - name: API typecheck
+        working-directory: api
+        run: npm run typecheck
+
+      - name: API tests
+        working-directory: api
+        run: npm test
+
+      - name: Endpoint list matches the code
+        working-directory: api
+        run: npm run endpoints:check
 
   secrets-check:
     name: Secrets Check
