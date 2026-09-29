@@ -26,6 +26,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: e.PORT,
     supabaseUrl: e.SUPABASE_URL.replace(/\/$/, ""),
     supabaseKey: e.SUPABASE_PUBLISHABLE_KEY,
-    corsOrigins: e.CORS_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean),
+    corsOrigins: e.CORS_ORIGINS.split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
   };
 }

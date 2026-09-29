@@ -25,13 +25,19 @@ describe("mines permissions", () => {
 
 describe("mines create and validate", () => {
   it("lets a manager add a site and returns it with 201", async () => {
-    const res = await testApp().call("POST", "/api/v1/mines", { token: "manager-token", body: site });
+    const res = await testApp().call("POST", "/api/v1/mines", {
+      token: "manager-token",
+      body: site,
+    });
     expect(res.status).toBe(201);
     expect(await res.json()).toMatchObject({ data: { name: "Kriel Plant 2", active: true } });
   });
 
   it("refuses a site with no name and says which field", async () => {
-    const res = await testApp().call("POST", "/api/v1/mines", { token: "owner-token", body: { location: "Kriel" } });
+    const res = await testApp().call("POST", "/api/v1/mines", {
+      token: "owner-token",
+      body: { location: "Kriel" },
+    });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_FAILED");
@@ -39,7 +45,10 @@ describe("mines create and validate", () => {
   });
 
   it("refuses a field it does not recognise instead of dropping it", async () => {
-    const res = await testApp().call("POST", "/api/v1/mines", { token: "owner-token", body: { ...site, is_admin: true } });
+    const res = await testApp().call("POST", "/api/v1/mines", {
+      token: "owner-token",
+      body: { ...site, is_admin: true },
+    });
     expect(res.status).toBe(400);
   });
 
@@ -52,7 +61,10 @@ describe("mines create and validate", () => {
   });
 
   it("refuses a body that is not JSON", async () => {
-    const res = await testApp().call("POST", "/api/v1/mines", { token: "owner-token", body: "{not json" });
+    const res = await testApp().call("POST", "/api/v1/mines", {
+      token: "owner-token",
+      body: "{not json",
+    });
     expect(res.status).toBe(400);
   });
 });
@@ -60,7 +72,9 @@ describe("mines create and validate", () => {
 describe("mines read, update, delete", () => {
   async function withSite() {
     const t = testApp();
-    const created = await (await t.call("POST", "/api/v1/mines", { token: "owner-token", body: site })).json();
+    const created = await (
+      await t.call("POST", "/api/v1/mines", { token: "owner-token", body: site })
+    ).json();
     return { ...t, id: created.data.id as string };
   }
 
@@ -71,7 +85,9 @@ describe("mines read, update, delete", () => {
   });
 
   it("answers 404 for a site that does not exist", async () => {
-    const res = await testApp().call("GET", "/api/v1/mines/00000000-0000-4000-8000-00000000abcd", { token: "worker-token" });
+    const res = await testApp().call("GET", "/api/v1/mines/00000000-0000-4000-8000-00000000abcd", {
+      token: "worker-token",
+    });
     expect(res.status).toBe(404);
   });
 
@@ -82,14 +98,23 @@ describe("mines read, update, delete", () => {
 
   it("updates only the fields sent", async () => {
     const { call, id } = await withSite();
-    const res = await call("PATCH", `/api/v1/mines/${id}`, { token: "manager-token", body: { target_cost_per_ton: 52 } });
-    expect(await res.json()).toMatchObject({ data: { name: "Kriel Plant 2", target_cost_per_ton: 52 } });
+    const res = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "manager-token",
+      body: { target_cost_per_ton: 52, version: 1 },
+    });
+    expect(await res.json()).toMatchObject({
+      data: { name: "Kriel Plant 2", target_cost_per_ton: 52 },
+    });
   });
 
   it("deletes a site, and a second delete answers 404", async () => {
     const { call, id } = await withSite();
-    expect((await call("DELETE", `/api/v1/mines/${id}`, { token: "owner-token" })).status).toBe(200);
-    expect((await call("DELETE", `/api/v1/mines/${id}`, { token: "owner-token" })).status).toBe(404);
+    expect((await call("DELETE", `/api/v1/mines/${id}`, { token: "owner-token" })).status).toBe(
+      200,
+    );
+    expect((await call("DELETE", `/api/v1/mines/${id}`, { token: "owner-token" })).status).toBe(
+      404,
+    );
   });
 });
 
@@ -104,19 +129,25 @@ describe("mines list paging and sorting", () => {
 
   it("sorts and pages, and reports the total", async () => {
     const { call } = await withThree();
-    const res = await call("GET", "/api/v1/mines?sort=name&order=desc&page=1&pageSize=2", { token: "worker-token" });
+    const res = await call("GET", "/api/v1/mines?sort=name&order=desc&page=1&pageSize=2", {
+      token: "worker-token",
+    });
     const body = await res.json();
     expect(body.data.map((m: { name: string }) => m.name)).toEqual(["Charlie", "Bravo"]);
     expect(body.meta).toEqual({ page: 1, pageSize: 2, total: 3 });
   });
 
   it("refuses to sort by a column that is not on the allowed list", async () => {
-    const res = await testApp().call("GET", "/api/v1/mines?sort=client_id", { token: "worker-token" });
+    const res = await testApp().call("GET", "/api/v1/mines?sort=client_id", {
+      token: "worker-token",
+    });
     expect(res.status).toBe(400);
   });
 
   it("refuses a page size above 200", async () => {
-    const res = await testApp().call("GET", "/api/v1/mines?pageSize=5000", { token: "worker-token" });
+    const res = await testApp().call("GET", "/api/v1/mines?pageSize=5000", {
+      token: "worker-token",
+    });
     expect(res.status).toBe(400);
   });
 });

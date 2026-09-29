@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListQuery } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
-import type { Page, Repository, RoleRepository } from "./types.js";
+import type { Page, Repository, RoleRepository, UpdateResult } from "./types.js";
 
 type PgError = { code?: string; message: string };
 
@@ -13,7 +13,10 @@ function translate(err: PgError): ApiError {
     case "23505":
       return new ApiError("CONFLICT", "A record with these details already exists");
     case "23503":
-      return new ApiError("CONFLICT", "This record is linked to another record that does not exist or still uses it");
+      return new ApiError(
+        "CONFLICT",
+        "This record is linked to another record that does not exist or still uses it",
+      );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
     default:
@@ -46,15 +49,29 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
   }
 
   async create(input: Input): Promise<Row> {
-    const { data, error } = await this.db.from(this.table).insert(input as object).select().single();
+    const { data, error } = await this.db
+      .from(this.table)
+      .insert(input as object)
+      .select()
+      .single();
     if (error) throw translate(error);
     return data as Row;
   }
 
-  async update(id: string, patch: Patch): Promise<Row | null> {
-    const { data, error } = await this.db.from(this.table).update(patch as object).eq("id", id).select().maybeSingle();
+  async update(id: string, patch: Patch, expectedVersion: number): Promise<UpdateResult<Row>> {
+    // The version condition is part of the UPDATE itself, so Postgres checks it under the row
+    // lock. Of two overlapping saves with the same version, the second matches no row.
+    const { data, error } = await this.db
+      .from(this.table)
+      .update(patch as object)
+      .eq("id", id)
+      .eq("version", expectedVersion)
+      .select()
+      .maybeSingle();
     if (error) throw translate(error);
-    return (data as Row) ?? null;
+    if (data) return { status: "updated", row: data as Row };
+    const current = await this.get(id);
+    return current ? { status: "stale", current } : { status: "missing" };
   }
 
   async remove(id: string): Promise<boolean> {

@@ -1,6 +1,6 @@
 import type { Hono } from "hono";
-import type { ZodType } from "zod";
-import { Id, ListQuery, type Permission } from "@reef/shared";
+import type { ZodObject, ZodType } from "zod";
+import { Id, ListQuery, versioned, type Permission } from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { parseBody, parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
@@ -17,7 +17,8 @@ type ResourceSpec = {
   noun: string;
   repo: (r: Repositories) => Repository<unknown, unknown, unknown>;
   input: ZodType;
-  patch: ZodType;
+  /** Fields a client may change. The factory adds the required `version` itself. */
+  patch: ZodObject;
   sortable: readonly string[];
   read: Permission;
   write: Permission;
@@ -31,7 +32,9 @@ type ResourceSpec = {
  */
 export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: ResourceSpec) {
   const base = `/api/v1/${spec.name}`;
-  const notFound = () => new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+  const Update = versioned(spec.patch);
+  const notFound = () =>
+    new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
   const Query = ListQuery.refine((q) => !q.sort || spec.sortable.includes(q.sort), {
     message: `Sort by one of: ${spec.sortable.join(", ")}`,
     path: ["sort"],
@@ -97,14 +100,27 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: `${base}/:id`,
       access: spec.write,
       summary: spec.summaries.update,
-      refuses: "Invalid or unrecognised fields, or a record that does not exist.",
+      refuses:
+        "Invalid or unrecognised fields, a missing version, or a version older than the stored one. " +
+        "The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw.",
     },
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
-      const body = await parseBody(c, spec.patch);
-      const row = await spec.repo(c.var.repos).update(id, body);
-      if (!row) throw notFound();
-      return ok(c, row);
+      // The schema is built per resource, so TypeScript only knows it adds `version: number`.
+      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<
+        string,
+        unknown
+      >;
+      const result = await spec.repo(c.var.repos).update(id, changes, version);
+      if (result.status === "missing") throw notFound();
+      if (result.status === "stale") {
+        throw new ApiError(
+          "CONFLICT",
+          `Someone else changed this ${spec.noun} after you opened it, so your changes were not saved. Reload it and try again.`,
+          { current: result.current },
+        );
+      }
+      return ok(c, result.row);
     },
   );
 
