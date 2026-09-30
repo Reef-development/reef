@@ -35,3 +35,4 @@ dist-ssr
 # Per-app environment files (never commit)
 api/.env
 web/.env
+.env
