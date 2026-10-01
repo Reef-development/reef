@@ -20,7 +20,8 @@ export type Deps = {
 export type AppEnv = {
   Variables: {
     deps: Deps;
-    user: { id: string; role: Role | null };
+    /** The caller. `plant` is null for the owner, who sees every plant. */
+    user: { id: string; role: Role | null; plant: string | null };
     repos: Repositories;
   };
 };
@@ -56,7 +57,6 @@ export function createApp(deps: Deps) {
   app.notFound((c) => fail(c, new ApiError("NOT_FOUND", "No such endpoint")));
   app.onError((err, c) => {
     if (err instanceof ApiError && err.code !== "INTERNAL") return fail(c, err);
-    // Unexpected failures are logged in full but never described to the caller.
     (deps.log ?? console.error)(`${c.req.method} ${c.req.path} failed`, err);
     return fail(
       c,

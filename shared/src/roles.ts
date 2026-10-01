@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The three roles the platform actually uses. The database enum `app_role` still carries
  * `supervisor` and `stock_controller` from the first migration; nothing assigns them and the
  * API treats a user holding only those as having no role.
@@ -22,6 +22,8 @@ export function highestRole(held: readonly string[]): Role | null {
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+  "stock:read": ["owner", "manager", "worker"],
+  "stock:write": ["owner", "manager"],
   // Managers see only their own plant's changes; the database enforces that part.
   "history:read": ["owner", "manager"],
 } as const satisfies Record<string, readonly Role[]>;

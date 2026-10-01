@@ -79,9 +79,6 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
     expectedVersion: number,
     reason: string,
   ): Promise<UpdateResult<Row>> {
-    // One stored procedure for every versioned table, so a table needs nothing of its own
-    // to be updatable. It sets the reason, runs the UPDATE, and returns the row, or null
-    // when no row matched the id and version.
     const { data, error } = await this.db.rpc("update_versioned", {
       p_table: this.table,
       p_id: id,
@@ -95,8 +92,6 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
       return { status: "updated", row: data as Row };
     }
 
-    // No row matched the id and version. Either the id does not exist, or someone else
-    // saved first. Fetch the current row to tell the difference.
     const current = await this.get(id);
     return current ? { status: "stale", current } : { status: "missing" };
   }
@@ -115,6 +110,16 @@ export class SupabaseRoleRepository implements RoleRepository {
     const { data, error } = await this.db.from("user_roles").select("role").eq("user_id", userId);
     if (error) throw translate(error);
     return (data ?? []).map((r: { role: string }) => r.role);
+  }
+
+  async plantFor(userId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from("profiles")
+      .select("plant")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw translate(error);
+    return (data as { plant: string | null } | null)?.plant ?? null;
   }
 }
 

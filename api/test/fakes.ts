@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { HistoryQuery, ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
+import type {
+  HistoryQuery,
+  ListQuery,
+  Mine,
+  MineInput,
+  MinePatch,
+  Stock,
+  StockInput,
+  StockPatch,
+} from "@reef/shared";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
@@ -8,18 +17,24 @@ import type {
   HistoryRepository,
   Page,
   Repository,
+  ScopedRepository,
   UpdateResult,
+  UserContext,
 } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Token → user and the roles stored for them, standing in for Supabase Auth and `user_roles`. */
-export const USERS: Record<string, { id: string; roles: string[] }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"] },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"] },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"] },
-  "legacy-token": { id: "00000000-0000-4000-8000-000000000004", roles: ["stock_controller"] },
+/** Token → user, their roles, and their plant (null for the owner, who sees every plant). */
+export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
+  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
+  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
+  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "legacy-token": {
+    id: "00000000-0000-4000-8000-000000000004",
+    roles: ["stock_controller"],
+    plant: "A",
+  },
 };
 
 /**
@@ -157,8 +172,79 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
+/** The fake stock repository. Mirrors the real one's plant filter and version check. */
+export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
+  rows: Stock[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<Stock>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "name") as keyof Stock;
+    const sorted = [...visible].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+
+  async get(id: string, user: UserContext): Promise<Stock | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+
+  async create(input: StockInput, user: UserContext): Promise<Stock> {
+    const now = new Date().toISOString();
+    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const row: Stock = {
+      id: randomUUID(),
+      sku: null,
+      unit: null,
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+      unit_cost: 0,
+      supplier_id: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+
+  async update(
+    id: string,
+    patch: StockPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<Stock>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
+  const stock = new MemoryStock();
 
   // The fake gets a "current user id" function so it can stamp history rows with the
   // actor the same way the trigger does (via auth.uid()). The value is set inside the
@@ -177,9 +263,13 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     repositories: (token) => {
       currentUserId = USERS[token]?.id ?? null;
       return {
-        roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        roles: {
+          forUser: async () => USERS[token]?.roles ?? [],
+          plantFor: async () => USERS[token]?.plant ?? null,
+        },
         history,
         mines,
+        stock,
         ...overrides,
       };
     },
@@ -201,5 +291,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, history, logged, call };
+  return { app, registry, mines, stock, history, logged, call };
 }
