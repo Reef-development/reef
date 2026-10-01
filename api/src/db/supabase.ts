@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+import { SupabaseStockLevelRepository } from "../repositories/stock-levels.js";
 import { SupabaseStockRepository } from "../repositories/stock.js";
 import {
   SupabaseHistoryRepository,
@@ -24,6 +25,7 @@ export function supabaseRepositories(config: Config) {
       history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
       stock: new SupabaseStockRepository(db),
+      stockLevels: new SupabaseStockLevelRepository(db),
     };
   };
 }

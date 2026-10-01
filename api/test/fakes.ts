@@ -7,6 +7,9 @@ import type {
   MinePatch,
   Stock,
   StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
   StockPatch,
 } from "@reef/shared";
 import { createApp } from "../src/app.js";
@@ -30,6 +33,11 @@ export const USERS: Record<string, { id: string; roles: string[]; plant: string 
   "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
   "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
   "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "no-plant-token": {
+    id: "00000000-0000-4000-8000-000000000005",
+    roles: ["manager"],
+    plant: null,
+  },
   "legacy-token": {
     id: "00000000-0000-4000-8000-000000000004",
     roles: ["stock_controller"],
@@ -82,6 +90,22 @@ function diff(
   return { old, next };
 }
 
+/**
+ * The plant for a create, mirroring the real repository. A non-owner without a plant on
+ * their profile cannot create — there is no plant to attribute the row to. Throws an
+ * ApiError so the app's error handler maps it to 403 rather than 500.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
+}
+
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
 
@@ -119,13 +143,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-
-  /**
-   * Mirrors update_versioned: if the reason is missing, throw. The real procedure
-   * raises a check_violation, which the repository translates to a 400, so a fake that
-   * just silently accepts an empty reason would hide the exact bug we are guarding
-   * against.
-   */
   async update(
     id: string,
     patch: MinePatch,
@@ -164,7 +181,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
 
     return { status: "updated", row: after };
   }
-
   async remove(id: string) {
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
@@ -186,7 +202,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     const from = (q.page - 1) * q.pageSize;
     return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
   }
-
   async get(id: string, user: UserContext): Promise<Stock | null> {
     await tick();
     const row = this.rows.find((r) => r.id === id);
@@ -194,17 +209,13 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     if (user.role !== "owner" && row.plant !== user.plant) return null;
     return { ...row };
   }
-
   async create(input: StockInput, user: UserContext): Promise<Stock> {
     const now = new Date().toISOString();
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const row: Stock = {
       id: randomUUID(),
       sku: null,
       unit: null,
-      qty_on_hand: 0,
-      reorder_point: 0,
-      reorder_qty: 0,
       unit_cost: 0,
       supplier_id: null,
       version: 1,
@@ -216,7 +227,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     this.rows.push(row);
     return row;
   }
-
   async update(
     id: string,
     patch: StockPatch,
@@ -231,7 +241,77 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     return { status: "updated", row: { ...row } };
   }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
 
+/** The fake stock-level repository. Mirrors the real one's plant filter and version check. */
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
+  rows: StockLevel[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof StockLevel;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<StockLevel | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: StockLevel = {
+      id: randomUUID(),
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: StockLevelPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<StockLevel>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
   async remove(id: string, user: UserContext): Promise<boolean> {
     const row = this.rows.find((r) => r.id === id);
     if (!row) return false;
@@ -245,10 +325,8 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   const stock = new MemoryStock();
+  const stockLevels = new MemoryStockLevel();
 
-  // The fake gets a "current user id" function so it can stamp history rows with the
-  // actor the same way the trigger does (via auth.uid()). The value is set inside the
-  // repositories closure, so it changes per request.
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
 
@@ -270,6 +348,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         history,
         mines,
         stock,
+        stockLevels,
         ...overrides,
       };
     },
@@ -291,5 +370,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, stock, history, logged, call };
+  return { app, registry, mines, stock, stockLevels, history, logged, call };
 }
