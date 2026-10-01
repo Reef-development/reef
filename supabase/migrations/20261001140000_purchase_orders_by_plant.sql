@@ -1,0 +1,97 @@
+﻿-- T14 (part 2): purchase orders carry a plant, and reorder levels become per-plant.
+--
+-- REEF confirmed two things in writing:
+--   1. Each plant's stock is managed separately. A part can be out at one plant while another
+--      has plenty, so reorder levels belong per plant, not per part. The part itself (name, sku,
+--      unit, supplier) stays shared; only the levels move.
+--   2. Purchase orders are management documents. Employees cannot place them; only authorised
+--      management can. A purchase order is always for one plant.
+
+-- 1. The levels move off stock_items into their own table, one row per part per plant.
+
+CREATE TABLE IF NOT EXISTS public.stock_levels (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  stock_item_id uuid NOT NULL REFERENCES public.stock_items(id) ON DELETE CASCADE,
+  plant text NOT NULL,
+  qty_on_hand numeric NOT NULL DEFAULT 0,
+  reorder_point numeric NOT NULL DEFAULT 0,
+  reorder_qty numeric NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  UNIQUE (stock_item_id, plant)
+);
+
+-- Carry the existing single-plant figures across before dropping them.
+INSERT INTO public.stock_levels (stock_item_id, plant, qty_on_hand, reorder_point, reorder_qty)
+SELECT id, plant, qty_on_hand, reorder_point, reorder_qty
+FROM public.stock_items
+WHERE plant IS NOT NULL
+ON CONFLICT (stock_item_id, plant) DO NOTHING;
+
+ALTER TABLE public.stock_items
+  DROP COLUMN IF EXISTS qty_on_hand,
+  DROP COLUMN IF EXISTS reorder_point,
+  DROP COLUMN IF EXISTS reorder_qty;
+
+-- 2. Purchase orders carry the plant they are for. There are no existing purchase orders,
+--    so the column can be required from the start.
+ALTER TABLE public.purchase_orders ADD COLUMN IF NOT EXISTS plant text NOT NULL;
+
+-- 3. Row-level security on stock_levels, same rule as stock_items.
+--    A signed-in user sees a stock level if it belongs to their plant, or if they are the owner.
+
+ALTER TABLE public.stock_levels ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "stock_levels: read by plant" ON public.stock_levels;
+CREATE POLICY "stock_levels: read by plant"
+  ON public.stock_levels
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      WHERE ur.user_id = auth.uid() AND ur.role = 'owner'
+    )
+    OR plant = (
+      SELECT p.plant FROM public.profiles p
+      WHERE p.id = auth.uid()
+    )
+  );
+
+DROP POLICY IF EXISTS "stock_levels: write by plant" ON public.stock_levels;
+CREATE POLICY "stock_levels: write by plant"
+  ON public.stock_levels
+  FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      WHERE ur.user_id = auth.uid() AND ur.role IN ('owner', 'manager')
+    )
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.user_roles ur
+        WHERE ur.user_id = auth.uid() AND ur.role = 'owner'
+      )
+      OR plant = (
+        SELECT p.plant FROM public.profiles p
+        WHERE p.id = auth.uid()
+      )
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.user_roles ur
+      WHERE ur.user_id = auth.uid() AND ur.role IN ('owner', 'manager')
+    )
+    AND (
+      EXISTS (
+        SELECT 1 FROM public.user_roles ur
+        WHERE ur.user_id = auth.uid() AND ur.role = 'owner'
+      )
+      OR plant = (
+        SELECT p.plant FROM public.profiles p
+        WHERE p.id = auth.uid()
+      )
+    )
+  );
