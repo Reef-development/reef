@@ -51,4 +51,4 @@ test("manager can approve a purchase order", () => {
 
 test("worker cannot approve a purchase order", () => {
   assert.equal(canApprovePurchaseOrder("worker"), false);
-});  
+});
