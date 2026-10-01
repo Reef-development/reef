@@ -4,6 +4,9 @@ import {
   MINE_SORTABLE,
   MineInput,
   MinePatch,
+  PURCHASE_ORDER_SORTABLE,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
   STOCK_LEVEL_SORTABLE,
   STOCK_SORTABLE,
   StockInput,
@@ -124,6 +127,26 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       update:
         "Changes a stock level's quantity or its reorder thresholds. Refuses a save from an out-of-date copy.",
       remove: "Deletes a stock level. Refuses if the caller cannot see it.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "purchase-orders",
+    noun: "purchase order",
+    repo: (r) => r.purchaseOrders,
+    input: PurchaseOrderInput,
+    patch: PurchaseOrderPatch,
+    sortable: PURCHASE_ORDER_SORTABLE,
+    read: "po:read",
+    write: "po:write",
+    summaries: {
+      list: "Lists purchase orders for the caller's plant. Only owners and managers can call this — employees cannot see purchase orders. An owner sees every plant.",
+      get: "Returns one purchase order, or 404 if it belongs to another plant.",
+      create:
+        "Raises a purchase order. Only owners and managers can call this. The plant is taken from the caller, except for an owner, who may raise one for any plant.",
+      update:
+        "Changes a purchase order's details or its status. Refuses a save from an out-of-date copy.",
+      remove: "Deletes a purchase order. Refuses if the caller cannot see it.",
     },
   });
 }

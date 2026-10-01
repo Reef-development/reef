@@ -5,6 +5,9 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
   Stock,
   StockInput,
   StockLevel,
@@ -45,10 +48,6 @@ export const USERS: Record<string, { id: string; roles: string[]; plant: string 
   },
 };
 
-/**
- * The in-memory stand-in for the history table. Rows are appended, never updated or
- * deleted. Tests read it to assert a change was recorded.
- */
 export class MemoryHistory implements HistoryRepository {
   rows: HistoryEntry[] = [];
 
@@ -71,10 +70,6 @@ export class MemoryHistory implements HistoryRepository {
   }
 }
 
-/**
- * The columns that differ between `before` and `after`. Mirrors the diff in the database
- * trigger, so a test can predict exactly what the history row will contain.
- */
 function diff(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -90,11 +85,6 @@ function diff(
   return { old, next };
 }
 
-/**
- * The plant for a create, mirroring the real repository. A non-owner without a plant on
- * their profile cannot create — there is no plant to attribute the row to. Throws an
- * ApiError so the app's error handler maps it to 403 rather than 500.
- */
 function plantForCreate(input: { plant: string }, user: UserContext): string {
   if (user.role === "owner") return input.plant;
   if (!user.plant) {
@@ -153,20 +143,16 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     if (!reason || reason.trim() === "") {
       throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
     }
-
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
-
     const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     const after = { ...row };
-
     const { old, next } = diff(
       before as unknown as Record<string, unknown>,
       after as unknown as Record<string, unknown>,
     );
-
     const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
     this.history.append({
       table_name: "mines",
@@ -178,7 +164,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       new_values: next,
       version: after.version,
     });
-
     return { status: "updated", row: after };
   }
   async remove(id: string) {
@@ -188,7 +173,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
-/** The fake stock repository. Mirrors the real one's plant filter and version check. */
 export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
   rows: Stock[] = [];
 
@@ -251,7 +235,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
   }
 }
 
-/** The fake stock-level repository. Mirrors the real one's plant filter and version check. */
 export class MemoryStockLevel implements ScopedRepository<
   StockLevel,
   StockLevelInput,
@@ -322,10 +305,85 @@ export class MemoryStockLevel implements ScopedRepository<
   }
 }
 
+export class MemoryPurchaseOrder implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
+  rows: PurchaseOrder[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof PurchaseOrder;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<PurchaseOrder | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      supplier_id: null,
+      status: "draft",
+      total_cost: 0,
+      notes: null,
+      approved_at: null,
+      ordered_at: null,
+      received_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: PurchaseOrderPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<PurchaseOrder>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   const stock = new MemoryStock();
   const stockLevels = new MemoryStockLevel();
+  const purchaseOrders = new MemoryPurchaseOrder();
 
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
@@ -349,6 +407,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         mines,
         stock,
         stockLevels,
+        purchaseOrders,
         ...overrides,
       };
     },
@@ -370,5 +429,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, stock, stockLevels, history, logged, call };
+  return { app, registry, mines, stock, stockLevels, purchaseOrders, history, logged, call };
 }
