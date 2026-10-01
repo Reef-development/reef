@@ -95,11 +95,7 @@ export class SupabaseStockRepository implements ScopedRepository<Stock, StockInp
   async remove(id: string, user: UserContext): Promise<boolean> {
     const existing = await this.get(id, user);
     if (!existing) return false;
-    const { data, error } = await this.db
-      .from("stock_items")
-      .delete()
-      .eq("id", id)
-      .select("id");
+    const { data, error } = await this.db.from("stock_items").delete().eq("id", id).select("id");
     if (error) throw translate(error);
     return (data ?? []).length > 0;
   }

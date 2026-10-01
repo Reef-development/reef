@@ -25,10 +25,9 @@ describe("signing in", () => {
   it("returns the caller's id and highest role", async () => {
     const res = await testApp().call("GET", "/api/v1/me", { token: "manager-token" });
     expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({
+    expect(await res.json()).toEqual({
       data: { id: "00000000-0000-4000-8000-000000000002", role: "manager", plant: "A" },
     });
-
   });
 
   it("treats a user holding only a retired role as having no role", async () => {
