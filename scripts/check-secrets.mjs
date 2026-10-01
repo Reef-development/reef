@@ -8,10 +8,14 @@ const ignoredDirectories = new Set([
   ".output",
 ]);
 
+// Put this in a comment on a line that is a known, agreed exception. Only that line is
+// skipped; the rest of the file is still checked.
+const ALLOW_MARKER = "secrets-check: allow";
+
 const suspiciousPatterns = [
-  /password\s*[:=]\s*["'`][^"'`]+["'`]/gi,
-  /secret\s*[:=]\s*["'`][^"'`]+["'`]/gi,
-  /api[_-]?key\s*[:=]\s*["'`][^"'`]+["'`]/gi,
+  /password\s*[:=]\s*["'`][^"'`]+["'`]/i,
+  /secret\s*[:=]\s*["'`][^"'`]+["'`]/i,
+  /api[_-]?key\s*[:=]\s*["'`][^"'`]+["'`]/i,
 ];
 
 const extensions = new Set([
@@ -39,14 +43,16 @@ function scan(directory) {
 
     if (!extensions.has(path.extname(entry.name))) continue;
 
-    const content = fs.readFileSync(fullPath, "utf8");
+    // Checked line by line, so one allowlisted line cannot hide a real secret elsewhere in
+    // the same file, and each finding names its line.
+    const lines = fs.readFileSync(fullPath, "utf8").split(/\r?\n/);
 
-    for (const pattern of suspiciousPatterns) {
-      if (pattern.test(content)) {
-        findings.push(fullPath);
-        break;
+    lines.forEach((line, index) => {
+      if (line.includes(ALLOW_MARKER)) return;
+      if (suspiciousPatterns.some((pattern) => pattern.test(line))) {
+        findings.push(`${fullPath}:${index + 1}`);
       }
-    }
+    });
   }
 
   return findings;
