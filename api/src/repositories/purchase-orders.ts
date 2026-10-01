@@ -29,6 +29,23 @@ function translate(err: PgError): ApiError {
   }
 }
 
+/**
+ * The plant for a create. An owner supplies one; anyone else's is fixed by their profile.
+ * A non-owner with no plant on their profile cannot raise a purchase order — there is no
+ * plant to attribute it to, and falling back to the submitted value would let them raise
+ * one for any plant by asking.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot raise a purchase order",
+    );
+  }
+  return user.plant;
+}
+
 export class SupabasePurchaseOrderRepository
   implements ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>
 {
@@ -37,8 +54,6 @@ export class SupabasePurchaseOrderRepository
   async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
     const from = (q.page - 1) * q.pageSize;
     let query = this.db.from("purchase_orders").select("*", { count: "exact" });
-    // The plant filter lives here, in the repository, not on the screen. An owner sees every
-    // plant; everyone else sees only their own. There is no code path that skips this.
     if (user.role !== "owner") {
       query = query.eq("plant", user.plant);
     }
@@ -58,16 +73,12 @@ export class SupabasePurchaseOrderRepository
     if (error) throw translate(error);
     if (!data) return null;
     const row = data as PurchaseOrder;
-    // A record belonging to another plant answers "not found", not "refused": a refusal
-    // would confirm the order exists.
     if (user.role !== "owner" && row.plant !== user.plant) return null;
     return row;
   }
 
   async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
-    // A non-owner can only create a purchase order for their own plant. The owner can create
-    // for any plant.
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const { data, error } = await this.db
       .from("purchase_orders")
       .insert({ ...input, plant } as object)
@@ -83,7 +94,6 @@ export class SupabasePurchaseOrderRepository
     expectedVersion: number,
     user: UserContext,
   ): Promise<UpdateResult<PurchaseOrder>> {
-    // Check the caller can see the record before allowing a write.
     const existing = await this.get(id, user);
     if (!existing) return { status: "missing" };
 

@@ -12,7 +12,13 @@ export const StockLevelInput = z
   })
   .strict();
 
-export const StockLevelPatch = StockLevelInput.partial().strict();
+/**
+ * A patch cannot change the plant or the item. Levels belong to one (item, plant) pair
+ * for their whole life; a change to either field would be a different level.
+ */
+export const StockLevelPatch = StockLevelInput.omit({ plant: true, stock_item_id: true })
+  .partial()
+  .strict();
 export const StockLevelUpdate = versioned(StockLevelPatch);
 
 export type StockLevelInput = z.infer<typeof StockLevelInput>;

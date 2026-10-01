@@ -24,6 +24,23 @@ function translate(err: PgError): ApiError {
   }
 }
 
+/**
+ * The plant for a create. An owner supplies one; anyone else's is fixed by their profile.
+ * A non-owner with no plant on their profile cannot create anything — there is no plant
+ * to attribute it to, and falling back to the submitted value would let them write into
+ * any plant by asking.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
+}
+
 export class SupabaseStockLevelRepository
   implements ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>
 {
@@ -32,8 +49,6 @@ export class SupabaseStockLevelRepository
   async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
     const from = (q.page - 1) * q.pageSize;
     let query = this.db.from("stock_levels").select("*", { count: "exact" });
-    // The plant filter lives here, in the repository, not on the screen. An owner sees every
-    // plant; everyone else sees only their own. There is no code path that skips this.
     if (user.role !== "owner") {
       query = query.eq("plant", user.plant);
     }
@@ -53,15 +68,12 @@ export class SupabaseStockLevelRepository
     if (error) throw translate(error);
     if (!data) return null;
     const row = data as StockLevel;
-    // A record belonging to another plant answers "not found", not "refused": a refusal
-    // would confirm the record exists.
     if (user.role !== "owner" && row.plant !== user.plant) return null;
     return row;
   }
 
   async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
-    // A non-owner can only create a level in their own plant. The owner can create in any.
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const { data, error } = await this.db
       .from("stock_levels")
       .insert({ ...input, plant } as object)
@@ -77,7 +89,6 @@ export class SupabaseStockLevelRepository
     expectedVersion: number,
     user: UserContext,
   ): Promise<UpdateResult<StockLevel>> {
-    // Check the caller can see the record before allowing a write.
     const existing = await this.get(id, user);
     if (!existing) return { status: "missing" };
 
