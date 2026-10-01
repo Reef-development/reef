@@ -2,6 +2,9 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
   Stock,
   StockInput,
   StockLevel,
@@ -17,4 +20,5 @@ export type Repositories = {
   mines: Repository<Mine, MineInput, MinePatch>;
   stock: ScopedRepository<Stock, StockInput, StockPatch>;
   stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;
+  purchaseOrders: ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>;
 };
