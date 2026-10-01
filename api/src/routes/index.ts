@@ -3,8 +3,11 @@ import {
   MINE_SORTABLE,
   MineInput,
   MinePatch,
+  STOCK_LEVEL_SORTABLE,
   STOCK_SORTABLE,
   StockInput,
+  StockLevelInput,
+  StockLevelPatch,
   StockPatch,
 } from "@reef/shared";
 import type { AppEnv } from "../app.js";
@@ -78,6 +81,26 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       update:
         "Changes a stock item's details or its levels. Refuses a save from an out-of-date copy.",
       remove: "Deletes a stock item. Refuses if the caller cannot see it.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "stock-levels",
+    noun: "stock level",
+    repo: (r) => r.stockLevels,
+    input: StockLevelInput,
+    patch: StockLevelPatch,
+    sortable: STOCK_LEVEL_SORTABLE,
+    read: "stock:read",
+    write: "stock:write",
+    summaries: {
+      list: "Lists stock levels for the caller's plant. An owner sees every plant; everyone else sees only their own.",
+      get: "Returns one stock level, or 404 if it belongs to another plant.",
+      create:
+        "Adds a stock level for a part at a plant. The plant is taken from the caller, except for an owner, who may set it.",
+      update:
+        "Changes a stock level's quantity or its reorder thresholds. Refuses a save from an out-of-date copy.",
+      remove: "Deletes a stock level. Refuses if the caller cannot see it.",
     },
   });
 }

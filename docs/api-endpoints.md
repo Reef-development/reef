@@ -2,7 +2,7 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-12 endpoints, 12 explained.
+17 endpoints, 17 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
@@ -18,3 +18,8 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | POST | `/api/v1/stock` | owner, manager | Adds a stock item. The plant is taken from the caller, except for an owner, who may set it. | Missing or invalid fields, and any field it does not recognise. |
 | PATCH | `/api/v1/stock/:id` | owner, manager | Changes a stock item's details or its levels. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
 | DELETE | `/api/v1/stock/:id` | owner, manager | Deletes a stock item. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
+| GET | `/api/v1/stock-levels` | owner, manager, worker | Lists stock levels for the caller's plant. An owner sees every plant; everyone else sees only their own. | An unknown sort column or a page size above 200. |
+| GET | `/api/v1/stock-levels/:id` | owner, manager, worker | Returns one stock level, or 404 if it belongs to another plant. | An id that is not a UUID, or a record that does not exist. |
+| POST | `/api/v1/stock-levels` | owner, manager | Adds a stock level for a part at a plant. The plant is taken from the caller, except for an owner, who may set it. | Missing or invalid fields, and any field it does not recognise. |
+| PATCH | `/api/v1/stock-levels/:id` | owner, manager | Changes a stock level's quantity or its reorder thresholds. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
+| DELETE | `/api/v1/stock-levels/:id` | owner, manager | Deletes a stock level. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
