@@ -1,10 +1,17 @@
 import type { Hono } from "hono";
-import { MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
+import {
+  MINE_SORTABLE,
+  MineInput,
+  MinePatch,
+  STOCK_SORTABLE,
+  StockInput,
+  StockPatch,
+} from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
 import { defineRoute } from "./define.js";
-import { resourceRoutes } from "./resource.js";
+import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 
 export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   defineRoute(
@@ -28,7 +35,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       path: "/api/v1/me",
       access: "signed-in",
       summary:
-        "Returns the signed-in user's id and role, so the web app can choose which screens to show.",
+        "Returns the signed-in user's id, role and plant, so the web app can choose which screens to show.",
       refuses: "A missing, expired or foreign token.",
     },
     (c) => ok(c, c.var.user),
@@ -51,6 +58,26 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       update: "Changes a site's details or its cost-per-ton target.",
       remove:
         "Deletes a site. Its production logs go with it; equipment and staff are unlinked, not deleted.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "stock",
+    noun: "stock item",
+    repo: (r) => r.stock,
+    input: StockInput,
+    patch: StockPatch,
+    sortable: STOCK_SORTABLE,
+    read: "stock:read",
+    write: "stock:write",
+    summaries: {
+      list: "Lists stock items for the caller's plant. An owner sees every plant; everyone else sees only their own.",
+      get: "Returns one stock item, or 404 if it belongs to another plant.",
+      create:
+        "Adds a stock item. The plant is taken from the caller, except for an owner, who may set it.",
+      update:
+        "Changes a stock item's details or its levels. Refuses a save from an out-of-date copy.",
+      remove: "Deletes a stock item. Refuses if the caller cannot see it.",
     },
   });
 }

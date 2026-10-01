@@ -89,4 +89,14 @@ export class SupabaseRoleRepository implements RoleRepository {
     if (error) throw translate(error);
     return (data ?? []).map((r: { role: string }) => r.role);
   }
+
+  async plantFor(userId: string): Promise<string | null> {
+    const { data, error } = await this.db
+      .from("profiles")
+      .select("plant")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) throw translate(error);
+    return (data as { plant: string | null } | null)?.plant ?? null;
+  }
 }
