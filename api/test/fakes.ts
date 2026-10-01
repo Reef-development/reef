@@ -210,7 +210,7 @@ export class MemoryStockLevel implements ScopedRepository<
 
   async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
     const now = new Date().toISOString();
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const row: StockLevel = {
       id: randomUUID(),
       qty_on_hand: 0,
@@ -285,7 +285,7 @@ export class MemoryPurchaseOrder implements ScopedRepository<
 
   async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
     const now = new Date().toISOString();
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const row: PurchaseOrder = {
       id: randomUUID(),
       supplier_id: null,

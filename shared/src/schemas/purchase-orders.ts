@@ -22,7 +22,12 @@ export const PurchaseOrderInput = z
   })
   .strict();
 
-export const PurchaseOrderPatch = PurchaseOrderInput.partial().strict();
+/**
+ * A patch cannot change the plant. The order was raised for a plant; moving it would
+ * rewrite who it belongs to. The API refuses a plant change at validation, and the
+ * database refuses it again at the policy layer.
+ */
+export const PurchaseOrderPatch = PurchaseOrderInput.omit({ plant: true }).partial().strict();
 export const PurchaseOrderUpdate = versioned(PurchaseOrderPatch);
 
 export type PurchaseOrderInput = z.infer<typeof PurchaseOrderInput>;

@@ -24,6 +24,23 @@ function translate(err: PgError): ApiError {
   }
 }
 
+/**
+ * The plant for a create. An owner supplies one; anyone else's is fixed by their profile.
+ * A non-owner with no plant on their profile cannot create anything — there is no plant
+ * to attribute it to, and falling back to the submitted value would let them write into
+ * any plant by asking.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
+}
+
 export class SupabaseStockLevelRepository implements ScopedRepository<
   StockLevel,
   StockLevelInput,
@@ -62,8 +79,7 @@ export class SupabaseStockLevelRepository implements ScopedRepository<
   }
 
   async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
-    // A non-owner can only create a level in their own plant. The owner can create in any.
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const { data, error } = await this.db
       .from("stock_levels")
       .insert({ ...input, plant } as object)

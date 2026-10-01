@@ -29,6 +29,23 @@ function translate(err: PgError): ApiError {
   }
 }
 
+/**
+ * The plant for a create. An owner supplies one; anyone else's is fixed by their profile.
+ * A non-owner with no plant on their profile cannot raise a purchase order — there is no
+ * plant to attribute it to, and falling back to the submitted value would let them raise
+ * one for any plant by asking.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot raise a purchase order",
+    );
+  }
+  return user.plant;
+}
+
 export class SupabasePurchaseOrderRepository implements ScopedRepository<
   PurchaseOrder,
   PurchaseOrderInput,
@@ -67,9 +84,7 @@ export class SupabasePurchaseOrderRepository implements ScopedRepository<
   }
 
   async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
-    // A non-owner can only create a purchase order for their own plant. The owner can create
-    // for any plant.
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const { data, error } = await this.db
       .from("purchase_orders")
       .insert({ ...input, plant } as object)
