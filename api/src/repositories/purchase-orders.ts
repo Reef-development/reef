@@ -29,9 +29,11 @@ function translate(err: PgError): ApiError {
   }
 }
 
-export class SupabasePurchaseOrderRepository
-  implements ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>
-{
+export class SupabasePurchaseOrderRepository implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
   constructor(private readonly db: SupabaseClient) {}
 
   async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {

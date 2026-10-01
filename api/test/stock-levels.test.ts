@@ -55,9 +55,7 @@ describe("T14: stock levels are scoped to the caller's plant", () => {
     expect(res.status).toBe(200);
 
     const body = await res.json();
-    const plants = body.data
-      .map((r: { plant: string }) => r.plant)
-      .sort();
+    const plants = body.data.map((r: { plant: string }) => r.plant).sort();
     expect(plants).toEqual(["A", "B"]);
   });
 

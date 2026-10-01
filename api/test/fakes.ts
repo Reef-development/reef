@@ -177,9 +177,11 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
 }
 
 /** The fake stock-level repository. Mirrors the real one's plant filter and version check. */
-export class MemoryStockLevel
-  implements ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>
-{
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
   rows: StockLevel[] = [];
 
   async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
@@ -250,9 +252,11 @@ export class MemoryStockLevel
 }
 
 /** The fake purchase-order repository. Mirrors the real one's plant filter and version check. */
-export class MemoryPurchaseOrder
-  implements ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>
-{
+export class MemoryPurchaseOrder implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
   rows: PurchaseOrder[] = [];
 
   async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
