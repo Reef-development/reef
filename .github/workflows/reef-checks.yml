@@ -53,6 +53,10 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          RLS_USER_A_EMAIL: ${{ secrets.RLS_USER_A_EMAIL }}
+          RLS_USER_A_PASSWORD: ${{ secrets.RLS_USER_A_PASSWORD }}
+          RLS_USER_B_EMAIL: ${{ secrets.RLS_USER_B_EMAIL }}
+          RLS_USER_B_PASSWORD: ${{ secrets.RLS_USER_B_PASSWORD }}
 
   typecheck:
     name: Type Check
