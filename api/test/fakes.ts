@@ -9,6 +9,7 @@ import type {
   StockPatch,
 } from "@reef/shared";
 import { createApp } from "../src/app.js";
+import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type {
   Page,
@@ -26,12 +27,33 @@ export const USERS: Record<string, { id: string; roles: string[]; plant: string 
   "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
   "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
   "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "no-plant-token": {
+    id: "00000000-0000-4000-8000-000000000005",
+    roles: ["manager"],
+    plant: null,
+  },
   "legacy-token": {
     id: "00000000-0000-4000-8000-000000000004",
     roles: ["stock_controller"],
     plant: "A",
   },
 };
+
+/**
+ * The plant for a create, mirroring the real repository. A non-owner without a plant on
+ * their profile cannot create — there is no plant to attribute the row to. Throws an
+ * ApiError so the app's error handler maps it to 403 rather than 500.
+ */
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
+}
 
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
@@ -106,14 +128,11 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
 
   async create(input: StockInput, user: UserContext): Promise<Stock> {
     const now = new Date().toISOString();
-    const plant = user.role === "owner" ? input.plant : (user.plant ?? input.plant);
+    const plant = plantForCreate(input, user);
     const row: Stock = {
       id: randomUUID(),
       sku: null,
       unit: null,
-      qty_on_hand: 0,
-      reorder_point: 0,
-      reorder_qty: 0,
       unit_cost: 0,
       supplier_id: null,
       version: 1,
