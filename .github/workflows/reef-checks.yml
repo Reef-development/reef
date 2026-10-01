@@ -1,4 +1,4 @@
-name: REEF Checks
+﻿name: REEF Checks
 
 on:
   push:
@@ -12,8 +12,6 @@ on:
       - develop
 
 jobs:
-
-  
 
   quick-tests:
     name: Quick Tests
@@ -52,6 +50,9 @@ jobs:
 
       - name: Run database tests
         run: npm run test:db
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
   typecheck:
     name: Type Check
@@ -111,9 +112,6 @@ jobs:
       - name: API check
         run: npm run api:check
 
-  # New: the delivered back end in api/. Builds shared/ first because api/ depends on it by
-  # path, then runs the API's typecheck, its test suite (including the SQL tests against a
-  # real in-process Postgres) and the check that docs/api-endpoints.md matches the code.
   api-tests:
     name: API Tests
     runs-on: ubuntu-latest
