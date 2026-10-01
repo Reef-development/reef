@@ -7,9 +7,7 @@ export type Page<T> = { rows: T[]; total: number };
  * (and returns the current copy), or finds no record at all.
  */
 export type UpdateResult<Row> =
-  | { status: "updated"; row: Row }
-  | { status: "stale"; current: Row }
-  | { status: "missing" };
+  { status: "updated"; row: Row } | { status: "stale"; current: Row } | { status: "missing" };
 
 /**
  * What a route needs from storage, and nothing about how it is stored. Handlers depend on this

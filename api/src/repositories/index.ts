@@ -1,11 +1,4 @@
-import type {
-  Mine,
-  MineInput,
-  MinePatch,
-  Stock,
-  StockInput,
-  StockPatch,
-} from "@reef/shared";
+import type { Mine, MineInput, MinePatch, Stock, StockInput, StockPatch } from "@reef/shared";
 import type { Repository, RoleRepository, ScopedRepository } from "./types.js";
 
 /** Everything a request can reach, already scoped to the caller. */

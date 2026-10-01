@@ -162,15 +162,15 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
-   repositories: (token) => ({
-  roles: {
-    forUser: async () => USERS[token]?.roles ?? [],
-    plantFor: async () => USERS[token]?.plant ?? null,
-  },
-  mines,
-  stock,
-  ...overrides,
-}),
+    repositories: (token) => ({
+      roles: {
+        forUser: async () => USERS[token]?.roles ?? [],
+        plantFor: async () => USERS[token]?.plant ?? null,
+      },
+      mines,
+      stock,
+      ...overrides,
+    }),
     log: (_msg, err) => logged.push(err),
   });
 
