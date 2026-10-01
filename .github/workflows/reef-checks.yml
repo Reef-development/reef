@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run database tests
+         - name: Run database tests
         run: npm run test:db
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
