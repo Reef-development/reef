@@ -21,17 +21,18 @@ CREATE TABLE IF NOT EXISTS public.stock_levels (
   UNIQUE (stock_item_id, plant)
 );
 
--- Carry the existing single-plant figures across before dropping them.
+-- Carry the existing single-plant figures across so no data is lost.
 INSERT INTO public.stock_levels (stock_item_id, plant, qty_on_hand, reorder_point, reorder_qty)
 SELECT id, plant, qty_on_hand, reorder_point, reorder_qty
 FROM public.stock_items
 WHERE plant IS NOT NULL
 ON CONFLICT (stock_item_id, plant) DO NOTHING;
 
-ALTER TABLE public.stock_items
-  DROP COLUMN IF EXISTS qty_on_hand,
-  DROP COLUMN IF EXISTS reorder_point,
-  DROP COLUMN IF EXISTS reorder_qty;
+-- The quantity columns stay on stock_items for now. The prototype's screens under src/ read
+-- them, and REEF uses the prototype — the API is not deployed until T25. Migrating those
+-- screens to stock_levels is Tayler's T14A; a follow-up migration drops the columns once
+-- T14A lands. Until then both schemas exist: stock_items keeps the old columns for the
+-- prototype, stock_levels is the source of truth for the API.
 
 -- 2. Purchase orders carry the plant they are for. There are no existing purchase orders,
 --    so the column can be required from the start.
