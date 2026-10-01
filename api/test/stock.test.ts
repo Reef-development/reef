@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { testApp } from "./fakes.js";
 
-const magnetiteAtA = { name: "Magnetite", plant: "A", qty_on_hand: 100 };
-const vBeltsAtB = { name: "V-belts", plant: "B", qty_on_hand: 20 };
+const magnetiteAtA = { name: "Magnetite", plant: "A" };
+const vBeltsAtB = { name: "V-belts", plant: "B" };
 
 describe("T14: stock is scoped to the caller's plant", () => {
   it("lets a worker at plant A read stock at plant A", async () => {
@@ -55,6 +55,18 @@ describe("T14: stock is scoped to the caller's plant", () => {
       body: vBeltsAtB,
     });
     // Worker lacks stock:write, so this is refused at the permission layer.
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses a non-owner with no plant from creating stock", async () => {
+    const { call } = testApp();
+    // A manager whose profile has no plant cannot create — there is no plant to attribute
+    // the row to. Falling back to the submitted plant would let them write into any plant
+    // by asking.
+    const res = await call("POST", "/api/v1/stock", {
+      token: "no-plant-token",
+      body: { name: "Ghost item", plant: "B" },
+    });
     expect(res.status).toBe(403);
   });
 });

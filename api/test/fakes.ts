@@ -260,7 +260,6 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
-<<<<<<< HEAD
     repositories: (token) => {
       currentUserId = USERS[token]?.id ?? null;
       return {
@@ -274,17 +273,6 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         ...overrides,
       };
     },
-=======
-    repositories: (token) => ({
-      roles: {
-        forUser: async () => USERS[token]?.roles ?? [],
-        plantFor: async () => USERS[token]?.plant ?? null,
-      },
-      mines,
-      stock,
-      ...overrides,
-    }),
->>>>>>> f7e1ac2 (T14: format api, shared and tests to prettier rules)
     log: (_msg, err) => logged.push(err),
   });
 
@@ -303,10 +291,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-<<<<<<< HEAD
   return { app, registry, mines, stock, history, logged, call };
 }
-=======
-  return { app, registry, mines, stock, logged, call };
-}
->>>>>>> f7e1ac2 (T14: format api, shared and tests to prettier rules)
