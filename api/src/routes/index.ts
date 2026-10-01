@@ -3,6 +3,7 @@ import { MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
+import { analyticsRoutes } from "./analytics.js";
 import { defineRoute } from "./define.js";
 import { resourceRoutes } from "./resource.js";
 
@@ -33,6 +34,8 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     (c) => ok(c, c.var.user),
   );
+
+  analyticsRoutes(app, registry);
 
   resourceRoutes(app, registry, {
     name: "mines",

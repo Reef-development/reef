@@ -1,7 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListQuery } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
-import type { Page, Repository, RoleRepository, UpdateResult } from "./types.js";
+import type {
+  AnalyticsRepository,
+  Page,
+  Period,
+  ProductionTotals,
+  Repository,
+  RoleRepository,
+  UpdateResult,
+} from "./types.js";
 
 type PgError = { code?: string; message: string };
 
@@ -88,5 +96,150 @@ export class SupabaseRoleRepository implements RoleRepository {
     const { data, error } = await this.db.from("user_roles").select("role").eq("user_id", userId);
     if (error) throw translate(error);
     return (data ?? []).map((r: { role: string }) => r.role);
+  }
+}
+
+/** Sums the numeric column of every row, treating a missing value as zero. */
+function sum<T>(rows: T[], pick: (row: T) => unknown): number {
+  return rows.reduce((total, row) => total + (Number(pick(row)) || 0), 0);
+}
+
+/** The first day of the month a date falls in, and the first day of the next one. */
+function monthStart(date: string): string {
+  return `${date.slice(0, 7)}-01`;
+}
+
+function daysInclusive(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`);
+  return Math.floor(ms / 86_400_000) + 1;
+}
+
+function endOfMonth(monthFirstDay: string): string {
+  const [y, m] = monthFirstDay.split("-").map(Number) as [number, number];
+  const last = new Date(Date.UTC(y, m, 0));
+  return last.toISOString().slice(0, 10);
+}
+
+export class SupabaseAnalyticsRepository implements AnalyticsRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async mines() {
+    const { data, error } = await this.db.from("mines").select("id, name").order("name");
+    if (error) throw translate(error);
+    return (data ?? []) as { id: string; name: string }[];
+  }
+
+  async productionTotals(mineId: string, period: Period): Promise<ProductionTotals> {
+    const { data, error } = await this.db
+      .from("production_logs")
+      .select("date, tons_produced, magnetite_cost, overtime_cost")
+      .eq("mine_id", mineId)
+      .gte("date", period.from)
+      .lte("date", period.to);
+    if (error) throw translate(error);
+    const rows = data ?? [];
+    return {
+      tons: sum(rows, (r) => r.tons_produced),
+      magnetiteCost: sum(rows, (r) => r.magnetite_cost),
+      overtimeCost: sum(rows, (r) => r.overtime_cost),
+      days: new Set(rows.map((r) => String(r.date))).size,
+    };
+  }
+
+  async productionByDay(mineId: string, period: Period) {
+    const { data, error } = await this.db
+      .from("production_logs")
+      .select("date, tons_produced")
+      .eq("mine_id", mineId)
+      .gte("date", period.from)
+      .lte("date", period.to)
+      .order("date");
+    if (error) throw translate(error);
+    // A day with no shift recorded is absent rather than zero: zero means nothing was
+    // produced, absent means nobody captured anything, and a chart that draws them the same
+    // way hides the second problem entirely.
+    const byDay = new Map<string, number>();
+    for (const row of data ?? []) {
+      const day = String(row.date);
+      byDay.set(day, (byDay.get(day) ?? 0) + (Number(row.tons_produced) || 0));
+    }
+    return [...byDay.entries()].map(([date, tons]) => ({ date, tons }));
+  }
+
+  /**
+   * Fixed costs are stored once per month. A period that covers part of a month gets its share
+   * of that month's cost, by days, rather than all of it or none of it.
+   */
+  async fixedCosts(mineId: string, period: Period): Promise<number> {
+    const { data, error } = await this.db
+      .from("static_costs")
+      .select("month, amount")
+      .eq("mine_id", mineId)
+      .gte("month", monthStart(period.from))
+      .lte("month", monthStart(period.to));
+    if (error) throw translate(error);
+
+    let total = 0;
+    for (const row of data ?? []) {
+      const first = String(row.month).slice(0, 10);
+      const last = endOfMonth(first);
+      const overlapFrom = first > period.from ? first : period.from;
+      const overlapTo = last < period.to ? last : period.to;
+      if (overlapFrom > overlapTo) continue;
+      const share = daysInclusive(overlapFrom, overlapTo) / daysInclusive(first, last);
+      total += (Number(row.amount) || 0) * share;
+    }
+    return total;
+  }
+
+  async maintenanceCost(mineId: string, period: Period): Promise<number> {
+    // Maintenance hangs off equipment, and equipment belongs to a site, so the site's
+    // equipment is read first. Two queries rather than a join, because the client speaks
+    // PostgREST rather than SQL.
+    const { data: equipment, error: equipmentError } = await this.db
+      .from("equipment")
+      .select("id")
+      .eq("mine_id", mineId);
+    if (equipmentError) throw translate(equipmentError);
+    const ids = (equipment ?? []).map((e: { id: string }) => e.id);
+    if (ids.length === 0) return 0;
+
+    const { data, error } = await this.db
+      .from("maintenance_logs")
+      .select("total_cost")
+      .in("equipment_id", ids)
+      .gte("date", period.from)
+      .lte("date", period.to);
+    if (error) throw translate(error);
+    return sum(data ?? [], (r) => r.total_cost);
+  }
+
+  async fuelCost(mineId: string, period: Period): Promise<number> {
+    const { data, error } = await this.db
+      .from("fuel_slips")
+      .select("total_cost")
+      .eq("mine_id", mineId)
+      .gte("date", period.from)
+      .lte("date", period.to);
+    if (error) throw translate(error);
+    return sum(data ?? [], (r) => r.total_cost);
+  }
+
+  async downtimeHours(mineId: string, period: Period) {
+    const { data, error } = await this.db
+      .from("downtime_events")
+      .select("reason, duration_hours, start_time")
+      .eq("mine_id", mineId)
+      .gte("start_time", `${period.from}T00:00:00Z`)
+      .lte("start_time", `${period.to}T23:59:59Z`);
+    if (error) throw translate(error);
+    const byReason = new Map<string, number>();
+    for (const row of data ?? []) {
+      const reason = String(row.reason);
+      byReason.set(reason, (byReason.get(reason) ?? 0) + (Number(row.duration_hours) || 0));
+    }
+    return [...byReason.entries()]
+      .map(([reason, hours]) => ({ reason, hours }))
+      .sort((a, b) => b.hours - a.hours);
   }
 }

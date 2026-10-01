@@ -27,3 +27,31 @@ export interface RoleRepository {
   /** Every role name held by the user, as stored. */
   forUser(userId: string): Promise<string[]>;
 }
+
+/** An inclusive period, as two YYYY-MM-DD dates. */
+export type Period = { from: string; to: string };
+
+export type ProductionTotals = {
+  tons: number;
+  magnetiteCost: number;
+  overtimeCost: number;
+  days: number;
+};
+
+/**
+ * What the money figures need from storage. Every method takes the period and one site, and
+ * returns figures rather than rows: the arithmetic lives in the service so it can be tested
+ * without a database, and so the same numbers cannot be worked out two different ways in two
+ * different screens.
+ */
+export interface AnalyticsRepository {
+  /** Sites the caller may see. Row-level security decides that, not this method. */
+  mines(): Promise<{ id: string; name: string }[]>;
+  productionTotals(mineId: string, period: Period): Promise<ProductionTotals>;
+  productionByDay(mineId: string, period: Period): Promise<{ date: string; tons: number }[]>;
+  /** Fixed monthly costs, apportioned to the days of the period that fall in each month. */
+  fixedCosts(mineId: string, period: Period): Promise<number>;
+  maintenanceCost(mineId: string, period: Period): Promise<number>;
+  fuelCost(mineId: string, period: Period): Promise<number>;
+  downtimeHours(mineId: string, period: Period): Promise<{ reason: string; hours: number }[]>;
+}
