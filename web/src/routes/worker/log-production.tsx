@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { reefToday } from "@reef/shared";
 import { useList } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,7 +26,7 @@ function Page() {
       if (tons <= 0) throw new Error("Enter tons produced");
       await api("/api/v1/production-logs", {
         method: "POST",
-        body: JSON.stringify({ mine_id: mineId, date: new Date().toISOString().slice(0, 10), tons_produced: tons }),
+        body: JSON.stringify({ mine_id: mineId, date: reefToday(), tons_produced: tons }),
       });
     },
     onSuccess: () => {

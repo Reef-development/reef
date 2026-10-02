@@ -114,6 +114,20 @@ describe("T10: capture endpoints refuse very old entries", () => {
   });
 });
 
+describe("T10: an entry sent without a date", () => {
+  it("is dated today in South Africa by the API, not left to the database's UTC date", async () => {
+    const { call } = testApp();
+    for (const [path, body] of [
+      ["/api/v1/production-logs", { mine_id: MINE, tons_produced: 1 }],
+      ["/api/v1/fuel-slips", { vehicle_label: "LDV 3", litres: 40, cost_per_litre: 22 }],
+    ] as const) {
+      const res = await call("POST", path, { token: "worker-token", body });
+      expect(res.status).toBe(201);
+      expect((await res.json()).data.date).toBe(reefToday());
+    }
+  });
+});
+
 describe("T10: the limit is a setting", () => {
   it("defaults to 60 days and every role can read it", async () => {
     const res = await testApp().call("GET", "/api/v1/settings", { token: "worker-token" });

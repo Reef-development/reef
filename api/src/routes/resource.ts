@@ -117,9 +117,11 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
     async (c) => {
       const body = await parseBody(c, spec.input);
       if (spec.captureDate) {
-        const date =
-          ((body as Record<string, unknown>)[spec.captureDate] as string | undefined) ??
-          reefToday();
+        const fields = body as Record<string, unknown>;
+        // An entry sent without a date is dated today in South Africa. Left to the database,
+        // it would get `current_date` in UTC and land on yesterday between midnight and 02:00.
+        fields[spec.captureDate] ??= reefToday();
+        const date = fields[spec.captureDate] as string;
         const problem = lateCaptureProblem(date, await c.var.repos.settings.captureMaxAgeDays());
         if (problem) {
           throw new ApiError("VALIDATION_FAILED", problem, [
