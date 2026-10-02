@@ -17,6 +17,9 @@ export type TableName =
  */
 const API_PATHS: Partial<Record<TableName, string>> = {
   mines: "/api/v1/mines",
+  production_logs: "/api/v1/production-logs",
+  fuel_slips: "/api/v1/fuel-slips",
+  maintenance_logs: "/api/v1/maintenance-logs",
 };
 
 /**
@@ -38,7 +41,11 @@ export function useList<T = any>(table: TableName, orderBy = "created_at", asc =
   });
 }
 
-export function useUpsert(table: TableName) {
+/**
+ * `showsConflicts`: the screen shows its own ConflictNotice when someone else saved first, so
+ * no toast is needed. Screens without one still get the server's message as a toast.
+ */
+export function useUpsert(table: TableName, opts: { showsConflicts?: boolean } = {}) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (row: any) => {
@@ -60,7 +67,7 @@ export function useUpsert(table: TableName) {
     },
     onError: (e: any) => {
       // A conflict is shown inside the edit dialog, next to what the person typed.
-      if (e instanceof ApiRequestError && e.code === "CONFLICT") return;
+      if (opts.showsConflicts && e instanceof ApiRequestError && e.code === "CONFLICT") return;
       toast.error(e.message ?? "Save failed");
     },
   });

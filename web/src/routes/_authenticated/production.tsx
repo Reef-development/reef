@@ -31,7 +31,7 @@ function Page() {
     const f = new FormData(e.currentTarget);
     if (!mineId) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
       mine_id: mineId,
       date: f.get("date"),
       shift,

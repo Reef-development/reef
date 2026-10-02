@@ -61,7 +61,7 @@ function Page() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
       date: f.get("date"),
       slip_no: f.get("slip_no") || null,
       mine_id: mineId === "none" ? null : mineId,
@@ -71,7 +71,6 @@ function Page() {
       fuel_type: fuelType,
       litres,
       cost_per_litre: cpl,
-      total_cost: Number((litres * cpl).toFixed(2)),
       odometer: f.get("odometer") ? Number(f.get("odometer")) : null,
       hours_reading: f.get("hours_reading") ? Number(f.get("hours_reading")) : null,
       notes: f.get("notes") || null,

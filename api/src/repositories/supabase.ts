@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListQuery } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
-import type { Page, Repository, RoleRepository, UpdateResult } from "./types.js";
+import type {
+  MaintenancePartsRepository,
+  Page,
+  PhotoStore,
+  Repository,
+  RoleRepository,
+  Row,
+  StockUsageRepository,
+  UpdateResult,
+} from "./types.js";
 
 type PgError = { code?: string; message: string };
 
@@ -19,6 +28,10 @@ function translate(err: PgError): ApiError {
       );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
+    case "22023":
+      return new ApiError("VALIDATION_FAILED", err.message);
+    case "RF404":
+      return new ApiError("NOT_FOUND", "That stock item does not exist");
     default:
       return new ApiError("INTERNAL", err.message);
   }
@@ -88,5 +101,94 @@ export class SupabaseRoleRepository implements RoleRepository {
     const { data, error } = await this.db.from("user_roles").select("role").eq("user_id", userId);
     if (error) throw translate(error);
     return (data ?? []).map((r: { role: string }) => r.role);
+  }
+}
+
+/** Creating a repair goes through create_maintenance_log, so the log and its parts land together. */
+export class SupabaseMaintenanceRepository<
+  Input extends { parts?: unknown[] },
+  Patch,
+> extends SupabaseTableRepository<Row, Input, Patch> {
+  constructor(private readonly client: SupabaseClient) {
+    super(client, "maintenance_logs", "date");
+  }
+
+  override async create(input: Input): Promise<Row> {
+    const { parts = [], ...log } = input;
+    const { data, error } = await this.client.rpc("create_maintenance_log", {
+      _log: log,
+      _parts: parts,
+    });
+    if (error) throw translate(error);
+    return data as Row;
+  }
+}
+
+export class SupabaseMaintenanceParts implements MaintenancePartsRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async forLog(logId: string): Promise<Row[]> {
+    const { data, error } = await this.db
+      .from("maintenance_parts")
+      .select("*, stock_items(name, unit)")
+      .eq("maintenance_id", logId)
+      .order("created_at");
+    if (error) throw translate(error);
+    return (data ?? []) as Row[];
+  }
+
+  async add(
+    logId: string,
+    part: { stock_item_id: string; qty: number; unit_cost?: number },
+  ): Promise<Row> {
+    const { data, error } = await this.db
+      .from("maintenance_parts")
+      .insert({ maintenance_id: logId, ...part })
+      .select()
+      .single();
+    if (error) throw translate(error);
+    return data as Row;
+  }
+
+  async remove(partId: string): Promise<boolean> {
+    const { data, error } = await this.db
+      .from("maintenance_parts")
+      .delete()
+      .eq("id", partId)
+      .select("id");
+    if (error) throw translate(error);
+    return (data ?? []).length > 0;
+  }
+}
+
+export class SupabaseStockUsage implements StockUsageRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async recordUsage(stockItemId: string, qty: number): Promise<Row> {
+    const { data, error } = await this.db.rpc("record_stock_usage", {
+      _item: stockItemId,
+      _qty: qty,
+    });
+    if (error) throw translate(error);
+    return data as Row;
+  }
+}
+
+export class SupabasePhotoStore implements PhotoStore {
+  private readonly bucket;
+
+  constructor(db: SupabaseClient) {
+    this.bucket = db.storage.from("reef-photos");
+  }
+
+  async uploadUrl(path: string) {
+    const { data, error } = await this.bucket.createSignedUploadUrl(path);
+    if (error) throw new ApiError("INTERNAL", error.message);
+    return { signedUrl: data.signedUrl, token: data.token };
+  }
+
+  async viewUrl(path: string) {
+    const { data, error } = await this.bucket.createSignedUrl(path, 3600);
+    return error ? null : data.signedUrl;
   }
 }

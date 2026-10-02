@@ -1,7 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
-import { SupabaseRoleRepository, SupabaseTableRepository } from "../repositories/supabase.js";
+import {
+  SupabaseMaintenanceParts,
+  SupabaseMaintenanceRepository,
+  SupabasePhotoStore,
+  SupabaseRoleRepository,
+  SupabaseStockUsage,
+  SupabaseTableRepository,
+} from "../repositories/supabase.js";
 
 /**
  * Builds the repositories for one request, carrying the caller's own token. The database
@@ -17,6 +24,12 @@ export function supabaseRepositories(config: Config) {
     return {
       roles: new SupabaseRoleRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
+      production: new SupabaseTableRepository(db, "production_logs", "date"),
+      fuel: new SupabaseTableRepository(db, "fuel_slips", "date"),
+      maintenance: new SupabaseMaintenanceRepository(db),
+      maintenanceParts: new SupabaseMaintenanceParts(db),
+      stockUsage: new SupabaseStockUsage(db),
+      photos: new SupabasePhotoStore(db),
     };
   };
 }
