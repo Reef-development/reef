@@ -3,7 +3,7 @@ import { can, highestRole, type Permission } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type { AppEnv } from "../app.js";
 
-/** Requires a valid token, then works out the caller's role once for the whole request. */
+/** Requires a valid token, then works out the caller's role and plant once for the whole request. */
 export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -20,8 +20,13 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   }
 
   const repos = c.var.deps.repositories(token);
-  const role = highestRole(await repos.roles.forUser(userId));
-  c.set("user", { id: userId, role });
+  // Both lookups run together: the role from `user_roles`, the plant from `profiles`.
+  const [roles, plant] = await Promise.all([
+    repos.roles.forUser(userId),
+    repos.roles.plantFor(userId),
+  ]);
+  const role = highestRole(roles);
+  c.set("user", { id: userId, role, plant });
   c.set("repos", repos);
   await next();
 });
