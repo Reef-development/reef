@@ -243,7 +243,6 @@ export type Database = {
           hire_date: string | null
           hourly_rate: number
           id: string
-          id_number: string | null
           mine_id: string | null
           notes: string | null
           phone: string | null
@@ -260,7 +259,6 @@ export type Database = {
           hire_date?: string | null
           hourly_rate?: number
           id?: string
-          id_number?: string | null
           mine_id?: string | null
           notes?: string | null
           phone?: string | null
@@ -277,7 +275,6 @@ export type Database = {
           hire_date?: string | null
           hourly_rate?: number
           id?: string
-          id_number?: string | null
           mine_id?: string | null
           notes?: string | null
           phone?: string | null
@@ -296,6 +293,69 @@ export type Database = {
           },
         ]
       }
+
+            employee_personal_information: {
+        Row: {
+          employee_id: string
+          id_number: string | null
+        }
+        Insert: {
+          employee_id: string
+          id_number?: string | null
+        }
+        Update: {
+          employee_id?: string
+          id_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_personal_information_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: true
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+            personal_information_audit: {
+        Row: {
+          id: string
+          user_id: string | null
+          employee_id: string | null
+          action: string
+          allowed: boolean
+          reason: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          employee_id?: string | null
+          action?: string
+          allowed: boolean
+          reason?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          employee_id?: string | null
+          action?: string
+          allowed?: boolean
+          reason?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "personal_information_audit_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+
       equipment: {
         Row: {
           created_at: string
@@ -358,6 +418,7 @@ export type Database = {
           },
         ]
       }
+
       fuel_slips: {
         Row: {
           cost_per_litre: number
@@ -969,15 +1030,33 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      has_role: {
-        Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
-      is_manager: { Args: { _uid: string }; Returns: boolean }
+  disclose_personal_information: {
+    Args: {
+      _employee_id: string
     }
+    Returns: string | null
+  }
+  has_role: {
+    Args: {
+      _role: Database["public"]["Enums"]["app_role"]
+      _user_id: string
+    }
+    Returns: boolean
+  }
+  is_manager: {
+    Args: {
+      _uid: string
+    }
+    Returns: boolean
+  }
+  set_employee_id_number: {
+    Args: {
+      _employee_id: string
+      _id_number: string
+    }
+    Returns: undefined
+  }
+}
     Enums: {
       app_role:
         | "owner"

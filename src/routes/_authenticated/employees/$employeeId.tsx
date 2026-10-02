@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
@@ -32,6 +33,9 @@ const STATUSES = ["present", "absent", "late", "leave", "sick"] as const;
 
 function Page() {
   const { employeeId } = Route.useParams();
+
+
+
   const employees = useList<any>("employees", "full_name", true);
   const mines = useList<any>("mines", "name", true);
   const attendance = useList<any>("attendance", "date");
@@ -61,12 +65,31 @@ function Page() {
     tons: myAtt.reduce((n: number, a: any) => n + Number(a.tons_contributed ?? 0), 0),
   }), [myAtt]);
 
+    const [personalIdNumber, setPersonalIdNumber] = useState<string | null>(null);
+
   const [attOpen, setAttOpen] = useState(false);
   const [editingAtt, setEditingAtt] = useState<any>(null);
   const [attShift, setAttShift] = useState<string>("morning");
   const [attStatus, setAttStatus] = useState<string>("present");
   const [transferOpen, setTransferOpen] = useState(false);
   const [toMine, setToMine] = useState("");
+
+  const handlePersonalInformationLookup = async () => {
+    const { data, error } = await supabase.rpc(
+  "disclose_personal_information",
+  {
+    _employee_id: employeeId,
+  }
+);
+    if (error) {
+      console.error("Failed to disclose personal information:", error);
+      return;
+    }
+
+    if (data) {
+      setPersonalIdNumber(data as string);
+    }
+  };
 
   const openNewAtt = () => { setEditingAtt(null); setAttShift(emp?.shift ?? "morning"); setAttStatus("present"); setAttOpen(true); };
   const openEditAtt = (r: any) => { setEditingAtt(r); setAttShift(r.shift); setAttStatus(r.status); setAttOpen(true); };
@@ -151,7 +174,26 @@ function Page() {
         <CardContent className="grid gap-3 sm:grid-cols-3 text-sm">
           <Info label="Employee no." value={emp.employee_no} />
           <Info label="Phone" value={emp.phone} />
-          <Info label="ID number" value={emp.id_number} />
+        <div>
+  <div className="text-xs uppercase tracking-wider text-muted-foreground">
+    Personal information
+  </div>
+
+  {personalIdNumber ? (
+  <div>{personalIdNumber}</div>
+) : (
+  <Button
+    type="button"
+    variant="outline"
+    size="sm"
+    className="mt-1"
+    onClick={handlePersonalInformationLookup}
+  >
+    View personal information
+  </Button>
+)}
+
+</div>
           <Info label="Hire date" value={emp.hire_date} />
           <Info label="Hourly rate" value={`${ZAR(emp.hourly_rate)}/h`} />
           <Info label="Status" value={emp.active ? "Active" : "Inactive"} />

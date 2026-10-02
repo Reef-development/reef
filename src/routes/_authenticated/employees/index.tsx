@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
@@ -47,25 +48,43 @@ function Page() {
   const openEdit = (r: any) => { setEditing(r); setMineId(r.mine_id ?? "none"); setShift(r.shift); setOpen(true); };
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
-      full_name: f.get("full_name"),
-      employee_no: f.get("employee_no") || null,
-      position: f.get("position") || null,
-      phone: f.get("phone") || null,
-      id_number: f.get("id_number") || null,
-      hire_date: f.get("hire_date") || null,
-      mine_id: mineId === "none" ? null : mineId,
-      shift,
-      team_name: f.get("team_name") || null,
-      hourly_rate: Number(f.get("hourly_rate") || 0),
-      notes: f.get("notes") || null,
-      active: true,
-    });
-    setOpen(false);
-  };
+  e.preventDefault();
+
+  const f = new FormData(e.currentTarget);
+  const idNumber = String(f.get("id_number") || "");
+
+  const savedEmployee = (await upsert.mutateAsync({
+    ...(editing?.id ? { id: editing.id } : {}),
+    full_name: f.get("full_name"),
+    employee_no: f.get("employee_no") || null,
+    position: f.get("position") || null,
+    phone: f.get("phone") || null,
+    hire_date: f.get("hire_date") || null,
+    mine_id: mineId === "none" ? null : mineId,
+    shift,
+    team_name: f.get("team_name") || null,
+    hourly_rate: Number(f.get("hourly_rate") || 0),
+    notes: f.get("notes") || null,
+    active: true,
+  })) as any;
+
+  if (idNumber) {
+    const { error } = await supabase.rpc(
+  "set_employee_id_number",
+  {
+    _employee_id: savedEmployee.id,
+    _id_number: idNumber,
+  }
+);
+
+    if (error) {
+      console.error("Failed to save employee ID number:", error);
+      return;
+    }
+  }
+
+  setOpen(false);
+};
 
   const rows = useMemo(() => (employees.data ?? []).filter((e: any) =>
     (filterMine === "all" || e.mine_id === filterMine) &&
@@ -139,7 +158,12 @@ function Page() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone"><Input name="phone" defaultValue={editing?.phone ?? ""} /></Field>
-              <Field label="ID number"><Input name="id_number" defaultValue={editing?.id_number ?? ""} /></Field>
+              <Field label="ID number">
+  <Input
+    name="id_number"
+    placeholder={editing ? "Enter a new ID number to change it" : "Enter ID number"}
+  />
+</Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Mine">
