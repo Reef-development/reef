@@ -116,7 +116,9 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
         version: number;
         reason: string;
       } & Record<string, unknown>;
-      const result = await spec.repo(c.var.repos).update(id, changes, version, reason, c.var.user.id);
+      const result = await spec
+        .repo(c.var.repos)
+        .update(id, changes, version, reason, c.var.user.id);
       if (result.status === "missing") throw notFound();
       if (result.status === "stale") {
         throw new ApiError(

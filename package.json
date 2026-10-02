@@ -9,10 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-
-
-"lint": "eslint api shared/src tests",
-
+    "lint": "eslint api shared/src tests",
     "format": "prettier --write .",
     "test": "node --env-file-if-exists=.env --test",
     "test:quick": "node --test tests/quick.test.mjs",
