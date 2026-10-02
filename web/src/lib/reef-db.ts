@@ -96,5 +96,8 @@ export function useRemove(table: TableName) {
 export const ZAR = (n: number | null | undefined) =>
   new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", maximumFractionDigits: 0 }).format(Number(n ?? 0));
 
+/** Rand per ton, or "No production" when nothing was produced, never a misleading R0. */
+export const RPT = (n: number | null | undefined) => (n === null || n === undefined ? "No production" : ZAR(n));
+
 export const NUM = (n: number | null | undefined) =>
   new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(Number(n ?? 0));
