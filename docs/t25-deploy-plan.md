@@ -28,17 +28,17 @@ Three accounts are needed. All three on the free tier.
 
 | Component | Provider | Free tier | Who holds it |
 |---|---|---|---|
-| API | Render | Web service, free plan | T25 |
-| Web app | Vercel | Hobby plan | T25 |
-| Database, auth, storage | Supabase | Free tier | T25 |
+| API | Render | Web service, free plan | reef-dev-team@outlook.com |
+| Web app | Vercel | Hobby plan | reef-dev-team@outlook.com |
+| Database, auth, storage | Supabase | Free tier | reef-dev-team@outlook.com |
 
-Each account must be a **team account**, not a personal one, so that no single person is the sole holder. If the team's convention is a shared login held by one person, that person is named in the deployment document and their responsibility for rotating credentials is recorded.
+Each account is created under a shared team email, not a personal one. The password for each account, and the recovery email and phone number, are stored in the team's shared password vault. The vault is the single source of truth for account access; nothing is stored in a file in the repository.
 
-**Tick 1 evidence:** a screenshot of each account dashboard showing the service exists and is running, and a screenshot of the GitHub repository's Secrets page showing the live values are present.
+**Tick 1 evidence:** a screenshot of each account dashboard showing the service exists and is running, and a screenshot of the GitHub repository's Secrets page showing the live values are present. Both screenshots and the vault location are recorded in `docs/DEPLOYMENT.md`.
 
 ## 2. The live database and its two users
 
-A fresh Supabase project is created for production. It is **separate from the development project**.
+A fresh Supabase project is created for production, separate from the development project. Its name is `reef-prod`. Its region is `eu-central-1` (Frankfurt), the closest available region to South Africa.
 
 Two database users are created inside it:
 
@@ -66,7 +66,7 @@ The live values are stored as GitHub repository secrets, and in no file. The sec
 
 One ordinary **variable**, not a secret, is added: `API_PUBLIC_URL`, the public HTTPS address of the deployed API. Variables are visible in logs; secrets are not. Only `API_PUBLIC_URL` is non-sensitive.
 
-**Tick 1 evidence (second half):** a screenshot of the repository Secrets page with all named secrets present, and the deployment document updated to say who holds each and how to replace it.
+**Tick 1 evidence (second half):** a screenshot of the repository Secrets page with all named secrets present, and `docs/DEPLOYMENT.md` updated to say who holds each and how to replace it.
 
 ## 4. What a deploy does
 
@@ -87,6 +87,7 @@ The workflow is `.github/workflows/deploy.yml`. The steps, in order:
 Every step runs without manual intervention.
 
 **Tick 3 evidence:** a workflow run that completes successfully with no manual steps, shown as a screenshot of the Actions summary.
+
 **Tick 4 evidence:** the same workflow run's artefact list, showing the backup file attached.
 
 ## 5. Environment separation
@@ -97,7 +98,7 @@ Three environments exist, each with its own database project.
 |---|---|---|
 | Local | Individual developer work | Developer's own Supabase project, or the shared dev project |
 | Staging | Integration testing and demonstration rehearsal | A second Supabase free-tier project, separate from production |
-| Production | The submitted, live system | The production Supabase project |
+| Production | The submitted, live system | `reef-prod` |
 
 The three are kept separate because migrations are the only operation in the release process capable of destroying data irreversibly. If staging and production share a database, there is no safe way to rehearse a destructive migration. A second free-tier project costs nothing and removes the risk.
 
@@ -121,7 +122,7 @@ A second workflow, `.github/workflows/keep-alive.yml`, runs on a schedule (every
 - Requests `API_PUBLIC_URL/health`
 - Runs a lightweight query against the database
 
-The probe keeps the services awake during operating hours. Outside operating hours it is disabled by the schedule, so the services can sleep to reduce resource use.
+The probe runs 24 hours a day, every day. A worker at a plant may capture at any hour, and a cold start of 30 to 60 seconds is unacceptable when they do. The free tier is generous enough to absorb a request every 10 minutes.
 
 ## 8. What is not in this plan
 
