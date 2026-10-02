@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
+import type {
+  Client,
+  ClientInput,
+  ClientPatch,
+  ListQuery,
+  Mine,
+  MineInput,
+  MinePatch,
+  Supplier,
+  SupplierInput,
+  SupplierPatch,
+} from "@reef/shared";
 import { createApp } from "../src/app.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type { HistoryEntry, Page, Repository, UpdateResult } from "../src/repositories/types.js";
@@ -16,8 +27,8 @@ export const USERS: Record<string, { id: string; roles: string[] }> = {
 };
 
 /**
- * The in-memory stand-in for the history table. Rows are appended, never updated or deleted.
- * Tests read it to assert a change was recorded.
+ * The in-memory stand-in for the history table. Rows are appended, never updated or
+ * deleted. Tests read it to assert a change was recorded.
  */
 export class MemoryHistory {
   rows: HistoryEntry[] = [];
@@ -52,6 +63,7 @@ function diff(
   return { old, next };
 }
 
+/** The fake mines repository. Writes to MemoryHistory on update, mirroring the real one. */
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
 
@@ -86,7 +98,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-  /** Like the database: the version check and the write happen together, with no await between. */
   async update(
     id: string,
     patch: MinePatch,
@@ -127,9 +138,163 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
+/** The fake supplier repository. Suppliers are not plant-scoped. Writes history on update. */
+export class MemorySupplier implements Repository<Supplier, SupplierInput, SupplierPatch> {
+  rows: Supplier[] = [];
+
+  constructor(private readonly history: MemoryHistory) {}
+
+  async list(q: ListQuery): Promise<Page<Supplier>> {
+    await tick();
+    const key = (q.sort ?? "name") as keyof Supplier;
+    const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: this.rows.length };
+  }
+  async get(id: string) {
+    await tick();
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async create(input: SupplierInput) {
+    const now = new Date().toISOString();
+    const row: Supplier = {
+      id: randomUUID(),
+      contact_name: null,
+      email: null,
+      phone: null,
+      notes: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: SupplierPatch,
+    expectedVersion: number,
+    reason: string,
+    changedBy: string,
+  ): Promise<UpdateResult<Supplier>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+
+    const before = { ...row };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    const after = { ...row };
+
+    const { old, next } = diff(
+      before as unknown as Record<string, unknown>,
+      after as unknown as Record<string, unknown>,
+    );
+    this.history.append({
+      table_name: "suppliers",
+      row_id: id,
+      changed_by: changedBy,
+      reason,
+      plant: null,
+      old_values: old,
+      new_values: next,
+      version: after.version,
+    });
+
+    return { status: "updated", row: after };
+  }
+  async remove(id: string) {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+/** The fake client repository. Clients are not plant-scoped. Writes history on update. */
+export class MemoryClient implements Repository<Client, ClientInput, ClientPatch> {
+  rows: Client[] = [];
+
+  constructor(private readonly history: MemoryHistory) {}
+
+  async list(q: ListQuery): Promise<Page<Client>> {
+    await tick();
+    const key = (q.sort ?? "name") as keyof Client;
+    const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: this.rows.length };
+  }
+  async get(id: string) {
+    await tick();
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async create(input: ClientInput) {
+    const now = new Date().toISOString();
+    const row: Client = {
+      id: randomUUID(),
+      contact_name: null,
+      contact_email: null,
+      contact_phone: null,
+      contract_start: null,
+      contract_end: null,
+      contract_revenue_monthly: null,
+      active: true,
+      notes: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: ClientPatch,
+    expectedVersion: number,
+    reason: string,
+    changedBy: string,
+  ): Promise<UpdateResult<Client>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+
+    const before = { ...row };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    const after = { ...row };
+
+    const { old, next } = diff(
+      before as unknown as Record<string, unknown>,
+      after as unknown as Record<string, unknown>,
+    );
+    this.history.append({
+      table_name: "clients",
+      row_id: id,
+      changed_by: changedBy,
+      reason,
+      plant: null,
+      old_values: old,
+      new_values: next,
+      version: after.version,
+    });
+
+    return { status: "updated", row: after };
+  }
+  async remove(id: string) {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   const mines = new MemoryMines(history);
+  const suppliers = new MemorySupplier(history);
+  const clients = new MemoryClient(history);
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -141,6 +306,8 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     repositories: (token) => ({
       roles: { forUser: async () => USERS[token]?.roles ?? [] },
       mines,
+      suppliers,
+      clients,
       ...overrides,
     }),
     log: (_msg, err) => logged.push(err),
@@ -161,5 +328,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, history, logged, call };
+  return { app, registry, mines, suppliers, clients, history, logged, call };
 }
