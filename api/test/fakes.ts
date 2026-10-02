@@ -40,6 +40,8 @@ import type {
   ScopedRepository,
   ServiceSweepRepository,
   SessionRepository,
+  Setting,
+  SettingsRepository,
   StockUsageRepository,
   UpdateResult,
   UserContext,
@@ -811,6 +813,26 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   };
 
   const sessionRows: UserSession[] = [];
+  const settingsStore: Setting[] = [
+    {
+      key: "capture_max_age_days",
+      value: 60,
+      description: "How many days old an entry may be when it is captured.",
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  const settings: SettingsRepository = {
+    list: async () => settingsStore.map((x) => ({ ...x })),
+    captureMaxAgeDays: async () => Number(settingsStore[0].value),
+    set: async (key, value) => {
+      const row = settingsStore.find((x) => x.key === key);
+      if (!row) return null;
+      row.value = value;
+      row.updated_at = new Date().toISOString();
+      return { ...row };
+    },
+  };
+
   const logged: unknown[] = [];
 
   const { app, registry } = createApp({
@@ -837,6 +859,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
           plantFor: async () => user?.plant ?? null,
         },
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
+        settings,
         history,
         mines,
         production,
@@ -899,6 +922,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     retention,
     notifications,
     jobs,
+    settingsStore,
     logged,
     call,
   };
