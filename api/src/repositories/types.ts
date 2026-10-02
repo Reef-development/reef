@@ -18,8 +18,18 @@ export interface Repository<Row, Input, Patch> {
   list(query: ListQuery): Promise<Page<Row>>;
   get(id: string): Promise<Row | null>;
   create(input: Input): Promise<Row>;
-  /** Applies the patch only if the stored version still equals `expectedVersion`. */
-  update(id: string, patch: Patch, expectedVersion: number): Promise<UpdateResult<Row>>;
+  /**
+   * Applies the patch only if the stored version still equals `expectedVersion`. On success,
+   * writes a row to the history table recording who made the change, when, the reason they
+   * gave, and the values before and after.
+   */
+  update(
+    id: string,
+    patch: Patch,
+    expectedVersion: number,
+    reason: string,
+    changedBy: string,
+  ): Promise<UpdateResult<Row>>;
   remove(id: string): Promise<boolean>;
 }
 
@@ -27,3 +37,20 @@ export interface RoleRepository {
   /** Every role name held by the user, as stored. */
   forUser(userId: string): Promise<string[]>;
 }
+
+/**
+ * The shape of a row in the history table. Written by the repository after every successful
+ * update, read by the history endpoints. Rows are never updated or deleted.
+ */
+export type HistoryEntry = {
+  id: string;
+  table_name: string;
+  row_id: string;
+  changed_by: string;
+  changed_at: string;
+  reason: string;
+  plant: string | null;
+  old_values: Record<string, unknown>;
+  new_values: Record<string, unknown>;
+  version: number;
+};

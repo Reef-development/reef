@@ -17,7 +17,21 @@ export type ListQuery = z.infer<typeof ListQuery>;
 /** The version a client read. Sent with every update so a stale copy cannot overwrite a newer one. */
 export const Version = z.number().int().positive();
 
-/** Turns a patch schema into an update schema that also requires the version the client read. */
+/**
+ * Why a change was made. Required on every update, so the history table has something to
+ * record. The client sends it in the PATCH body alongside the version.
+ */
+export const Reason = z
+  .string()
+  .trim()
+  .min(1, "A reason is required when changing a record")
+  .max(500, "The reason is too long (500 characters maximum)");
+
+/**
+ * Turns a patch schema into an update schema. Two fields are added: the version the client
+ * read, which makes two overlapping saves safe, and the reason, which records why the change
+ * was made in the history table.
+ */
 export function versioned<T extends z.ZodObject>(patch: T) {
-  return patch.extend({ version: Version }).strict();
+  return patch.extend({ version: Version, reason: Reason }).strict();
 }

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
 import { createApp } from "../src/app.js";
 import type { Repositories } from "../src/repositories/index.js";
-import type { Page, Repository, UpdateResult } from "../src/repositories/types.js";
+import type { HistoryEntry, Page, Repository, UpdateResult } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -15,8 +15,47 @@ export const USERS: Record<string, { id: string; roles: string[] }> = {
   "legacy-token": { id: "00000000-0000-4000-8000-000000000004", roles: ["stock_controller"] },
 };
 
+/**
+ * The in-memory stand-in for the history table. Rows are appended, never updated or deleted.
+ * Tests read it to assert a change was recorded.
+ */
+export class MemoryHistory {
+  rows: HistoryEntry[] = [];
+
+  append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
+    const full: HistoryEntry = {
+      id: randomUUID(),
+      changed_at: new Date().toISOString(),
+      ...entry,
+    };
+    this.rows.push(full);
+    return full;
+  }
+}
+
+/**
+ * The columns that differ between `before` and `after`. Mirrors the diff in the Supabase
+ * repository, so a test can predict exactly what the history row will contain.
+ */
+function diff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): { old: Record<string, unknown>; next: Record<string, unknown> } {
+  const old: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      old[key] = before[key];
+      next[key] = after[key];
+    }
+  }
+  return { old, next };
+}
+
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
+
+  constructor(private readonly history: MemoryHistory) {}
 
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
@@ -48,13 +87,38 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     return row;
   }
   /** Like the database: the version check and the write happen together, with no await between. */
-  async update(id: string, patch: MinePatch, expectedVersion: number): Promise<UpdateResult<Mine>> {
+  async update(
+    id: string,
+    patch: MinePatch,
+    expectedVersion: number,
+    reason: string,
+    changedBy: string,
+  ): Promise<UpdateResult<Mine>> {
     await tick();
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+
+    const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
-    return { status: "updated", row: { ...row } };
+    const after = { ...row };
+
+    const { old, next } = diff(
+      before as unknown as Record<string, unknown>,
+      after as unknown as Record<string, unknown>,
+    );
+    this.history.append({
+      table_name: "mines",
+      row_id: id,
+      changed_by: changedBy,
+      reason,
+      plant: null,
+      old_values: old,
+      new_values: next,
+      version: after.version,
+    });
+
+    return { status: "updated", row: after };
   }
   async remove(id: string) {
     const before = this.rows.length;
@@ -64,7 +128,8 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
 }
 
 export function testApp(overrides: Partial<Repositories> = {}) {
-  const mines = new MemoryMines();
+  const history = new MemoryHistory();
+  const mines = new MemoryMines(history);
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -96,5 +161,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, logged, call };
+  return { app, registry, mines, history, logged, call };
 }

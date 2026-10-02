@@ -24,6 +24,25 @@ function translate(err: PgError): ApiError {
   }
 }
 
+/**
+ * The columns that differ between `before` and `after`. A history row only carries what
+ * actually changed, so a hundred edits to the same mine do not keep a hundred full copies.
+ */
+function diff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): { old: Record<string, unknown>; next: Record<string, unknown> } {
+  const old: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      old[key] = before[key];
+      next[key] = after[key];
+    }
+  }
+  return { old, next };
+}
+
 export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Row, Input, Patch> {
   constructor(
     private readonly db: SupabaseClient,
@@ -58,7 +77,18 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
     return data as Row;
   }
 
-  async update(id: string, patch: Patch, expectedVersion: number): Promise<UpdateResult<Row>> {
+  async update(
+    id: string,
+    patch: Patch,
+    expectedVersion: number,
+    reason: string,
+    changedBy: string,
+  ): Promise<UpdateResult<Row>> {
+    // Read the row before the update so the history row can record what changed. This is a
+    // second query, but it is the one thing the version check alone cannot give us.
+    const before = await this.get(id);
+    if (!before) return { status: "missing" };
+
     // The version condition is part of the UPDATE itself, so Postgres checks it under the row
     // lock. Of two overlapping saves with the same version, the second matches no row.
     const { data, error } = await this.db
@@ -69,9 +99,36 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
       .select()
       .maybeSingle();
     if (error) throw translate(error);
-    if (data) return { status: "updated", row: data as Row };
-    const current = await this.get(id);
-    return current ? { status: "stale", current } : { status: "missing" };
+
+    if (!data) {
+      const current = await this.get(id);
+      return current ? { status: "stale", current } : { status: "missing" };
+    }
+
+    const after = data as Row;
+    const { old, next } = diff(before as Record<string, unknown>, after as Record<string, unknown>);
+    const afterRecord = after as Record<string, unknown>;
+
+    // History is append-only. If the insert fails, the update has already landed: rather than
+    // pretend the whole thing failed, log it and carry on. The change is real; the record of
+    // it is best-effort.
+    const { error: historyError } = await this.db.from("history").insert({
+      table_name: this.table,
+      row_id: id,
+      changed_by: changedBy,
+      reason,
+      plant: typeof afterRecord.plant === "string" ? afterRecord.plant : null,
+      old_values: old,
+      new_values: next,
+      version: typeof afterRecord.version === "number" ? afterRecord.version : expectedVersion + 1,
+    });
+    if (historyError) {
+      // Nothing to throw at the caller — the update succeeded. The console is the only place
+      // the miss is visible. A follow-up task should add a health check for history gaps.
+      console.error("Failed to write history row", historyError);
+    }
+
+    return { status: "updated", row: after };
   }
 
   async remove(id: string): Promise<boolean> {
