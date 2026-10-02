@@ -137,3 +137,48 @@ You'll land on the sign-in screen:
 | Wrong folder | Run `pwd` and confirm `package.json` is present |
 | `.env` missing or not loaded | Check the file exists in the project root |
 | Port `5173` in use | Vite will auto-suggest the next free port — check the terminal output |
+
+---
+
+# Running the API and the web app
+
+The prototype above lives in `src/` and is left as it was. The delivered system is three folders
+next to it:
+
+| Folder | What it is |
+|---|---|
+| `shared/` | Roles, the permission table, the response envelope and the validation schemas. Used by both of the others |
+| `api/` | The REEF API (Hono, TypeScript) at `http://localhost:8787`. Every request is checked for a valid sign-in and a permission |
+| `web/` | The front end. Signs in with Supabase Auth, then asks the API who you are and what you may see |
+
+## First time
+
+`shared/` must be built before the other two can use it.
+
+```bash
+cd shared && npm install && npm run build && cd ..
+cd api && npm install && cp .env.example .env && cd ..
+cd web && npm install && cp .env.example .env && cd ..
+```
+
+Fill in both `.env` files with the Supabase project URL and publishable key. Neither file is
+committed: both are in `.gitignore`.
+
+## Every time
+
+In two terminals:
+
+```bash
+cd api && npm run dev
+```
+
+```bash
+cd web && npm run dev
+```
+
+Check the API with `http://localhost:8787/health`, which should answer `{"data":{"status":"ok"}}`.
+
+## Checks before a pull request
+
+From `api/`: `npm run typecheck`, `npm test`, and `npm run endpoints:check`. If you added or
+changed a route, run `npm run endpoints` and commit the regenerated `docs/api-endpoints.md`.
