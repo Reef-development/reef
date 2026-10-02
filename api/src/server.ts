@@ -9,6 +9,7 @@ const { app } = createApp({
   verifyToken: supabaseVerifier(config.supabaseUrl),
   repositories: supabaseRepositories(config),
   corsOrigins: config.corsOrigins,
+  retention: config.retention,
 });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

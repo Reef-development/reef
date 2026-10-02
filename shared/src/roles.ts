@@ -22,6 +22,17 @@ export function highestRole(held: readonly string[]): Role | null {
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+  // Money figures. A worker captures the numbers that feed these and does not see what they
+  // add up to, which is the line section 2.2.2 of the brief draws.
+  "analytics:read": ["owner", "manager"],
+  // Comparing sites against each other is the owner's alone: a manager seeing the ranking
+  // learns how another manager's site is doing, which is not theirs to know.
+  "analytics:compare": ["owner"],
+  "reports:read": ["owner", "manager"],
+  "assistant:ask": ["owner", "manager"],
+  // What is due to be removed under the retention rules REEF gave. The owner's alone: it is
+  // a list of people who have left, and who has left a site is not a site manager's business.
+  "retention:read": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
