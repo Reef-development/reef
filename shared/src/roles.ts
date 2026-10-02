@@ -1,4 +1,4 @@
-/**
+﻿/**
  * The three roles the platform actually uses. The database enum `app_role` still carries
  * `supervisor` and `stock_controller` from the first migration; nothing assigns them and the
  * API treats a user holding only those as having no role.
@@ -18,10 +18,18 @@ export function highestRole(held: readonly string[]): Role | null {
  * Who may do what, per resource. This is the single permission table: the API enforces it on
  * every route, the endpoint list prints it, and the web app reads it to decide what to show.
  * Row-level security in the database stays underneath as the second line of defence.
+ *
+ * Suppliers and clients are commercial records: they carry cost, contract and revenue
+ * information. Workers capture stock usage and repairs; they do not see the vendors REEF
+ * buys from or the contracts REEF holds.
  */
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+  "suppliers:read": ["owner", "manager"],
+  "suppliers:write": ["owner", "manager"],
+  "clients:read": ["owner", "manager"],
+  "clients:write": ["owner", "manager"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

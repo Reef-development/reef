@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+import { SupabaseClientRepository } from "../repositories/clients.js";
+import { SupabaseSupplierRepository } from "../repositories/suppliers.js";
 import { SupabaseRoleRepository, SupabaseTableRepository } from "../repositories/supabase.js";
 
 /**
@@ -17,6 +19,8 @@ export function supabaseRepositories(config: Config) {
     return {
       roles: new SupabaseRoleRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
+      suppliers: new SupabaseSupplierRepository(db),
+      clients: new SupabaseClientRepository(db),
     };
   };
 }
