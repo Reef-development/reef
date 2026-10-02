@@ -20,7 +20,11 @@ export type Deps = {
 export type AppEnv = {
   Variables: {
     deps: Deps;
-    user: { id: string; role: Role | null };
+    user: {
+  id: string;
+  role: Role | null;
+  sessionId: string;
+};
     repos: Repositories;
   };
 };

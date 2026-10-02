@@ -1,8 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListQuery } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
-import type { Page, Repository, RoleRepository, UpdateResult } from "./types.js";
-
+import type {
+  Page,
+  Repository,
+  RoleRepository,
+  SessionRepository,
+  UpdateResult,
+  UserSession,
+} from "./types.js";
 type PgError = { code?: string; message: string };
 
 /** Postgres and PostgREST error codes that are the caller's fault, mapped to what they mean. */
@@ -88,5 +94,57 @@ export class SupabaseRoleRepository implements RoleRepository {
     const { data, error } = await this.db.from("user_roles").select("role").eq("user_id", userId);
     if (error) throw translate(error);
     return (data ?? []).map((r: { role: string }) => r.role);
+  }
+}
+
+export class SupabaseSessionRepository implements SessionRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async touch(
+    sessionId: string,
+    device: string | null,
+    address: string | null,
+  ): Promise<boolean> {
+    const { data, error } = await this.db.rpc("touch_user_session", {
+      _session_id: sessionId,
+      _device: device,
+      _address: address,
+    });
+
+    if (error) throw translate(error);
+
+    return data === true;
+  }
+
+  async forUser(userId: string): Promise<UserSession[]> {
+    const { data, error } = await this.db
+      .from("user_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("last_used_at", { ascending: false });
+
+    if (error) throw translate(error);
+
+    return (data ?? []) as UserSession[];
+  }
+
+  async revoke(sessionId: string): Promise<boolean> {
+    const { data, error } = await this.db.rpc("revoke_user_session", {
+      _session_id: sessionId,
+    });
+
+    if (error) throw translate(error);
+
+    return data === true;
+  }
+
+  async revokeAll(userId: string): Promise<number> {
+    const { data, error } = await this.db.rpc("revoke_all_user_sessions", {
+      _target_user_id: userId,
+    });
+
+    if (error) throw translate(error);
+
+    return typeof data === "number" ? data : 0;
   }
 }

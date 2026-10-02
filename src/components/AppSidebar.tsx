@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, Users, Mountain, Wrench, Boxes, Truck,
   ClipboardList, ShoppingCart, Receipt, AlertOctagon, HardHat,
-  Gauge, LineChart, Bot, Fuel,
+  Gauge, LineChart, Bot, Fuel, MonitorSmartphone,
 } from "lucide-react";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
@@ -26,6 +26,7 @@ const items = [
   { title: "Production", url: "/production", icon: Gauge },
   { title: "Fuel Slips", url: "/fuel", icon: Fuel },
   { title: "Static Costs", url: "/static-costs", icon: Receipt },
+  { title: "Active Sign-ins", url: "/sessions", icon: MonitorSmartphone },
 ] as const;
 
 export function AppSidebar() {

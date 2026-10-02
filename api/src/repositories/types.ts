@@ -27,3 +27,35 @@ export interface RoleRepository {
   /** Every role name held by the user, as stored. */
   forUser(userId: string): Promise<string[]>;
 }
+
+export type UserSession = {
+  id: string;
+  user_id: string;
+  session_id: string;
+  device: string | null;
+  address: string | null;
+  last_used_at: string;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export interface SessionRepository {
+  /**
+   * Records the current request for this session.
+   * Returns false when the session has been revoked.
+   */
+  touch(
+    sessionId: string,
+    device: string | null,
+    address: string | null,
+  ): Promise<boolean>;
+
+  /** Lists sign-ins belonging to one user. */
+  forUser(userId: string): Promise<UserSession[]>;
+
+  /** Revokes one sign-in. */
+  revoke(sessionId: string): Promise<boolean>;
+
+  /** Revokes every active sign-in belonging to a user. */
+  revokeAll(userId: string): Promise<number>;
+}
