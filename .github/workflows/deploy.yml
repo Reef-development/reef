@@ -50,11 +50,21 @@ jobs:
 
       # 2. Refuse to continue if the backup is suspiciously small. A dump under 1 KB
       #    means something failed silently (wrong database, wrong user, empty schema)
-      #    and we do not want to apply migrations on top of that.
+      #    and we do not want to apply migrations on top of that. On the first deploy,
+      #    the target database is legitimately almost empty, so the check is skipped
+      #    if there are no public tables yet.
       - name: Check the backup is real
+        env:
+          DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
         run: |
           SIZE=$(stat -c%s backup/*.sql)
           echo "Backup size: $SIZE bytes"
+          TABLES=$(psql "$DATABASE_OWNER_URL" -tA -c "select count(*) from information_schema.tables where table_schema = 'public'")
+          echo "Public tables in the live database: $TABLES"
+          if [ "$TABLES" -eq 0 ]; then
+            echo "First deploy: no tables yet, backup size check skipped."
+            exit 0
+          fi
           if [ "$SIZE" -lt 1024 ]; then
             echo "Backup is too small to be a real database. Refusing to continue."
             exit 1
