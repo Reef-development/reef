@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/NumberField";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
 import { Camera } from "lucide-react";
@@ -27,6 +28,7 @@ function Page() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  const once = useOneAtATime();
   const submit = useMutation({
     mutationFn: async () => {
       if (!equipId && !label.trim()) throw new Error("Pick a vehicle or type a label");
@@ -92,7 +94,7 @@ function Page() {
         <Label className="flex items-center gap-2"><Camera className="w-4 h-4" />Slip photo</Label>
         <Input type="file" accept="image/*" capture="environment" multiple className="h-12" onChange={(e) => setPhotos(e.target.files)} />
       </div>
-      <Button className="w-full h-14 text-base" onClick={() => submit.mutate()} disabled={submit.isPending}>
+      <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}
       </Button>
     </div>

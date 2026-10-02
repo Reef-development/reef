@@ -19,7 +19,9 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest-setup.ts"],
-    include: ["src/**/*.test.{ts,tsx}", "test/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "test/**/*.test.{ts,tsx}"],
+    // Screen tests load real pages (charts included); the first one pays the cold start.
+    testTimeout: 30_000,
     css: false,
   },
 });

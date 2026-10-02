@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -26,9 +27,12 @@ function Page() {
   const openNew = () => { setEditing(null); setMineId(""); setShift("morning"); setOpen(true); };
   const openEdit = (r: any) => { setEditing(r); setMineId(r.mine_id); setShift(r.shift ?? "morning"); setOpen(true); };
 
+  const once = useOneAtATime();
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // A double tap must not save twice: the second submit is ignored while the first is in flight.
+    await once(async () => {
     if (!mineId) return;
     await upsert.mutateAsync({
       ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
@@ -44,6 +48,7 @@ function Page() {
       notes: f.get("notes") || null,
     });
     setOpen(false);
+    }).catch(() => {});
   };
 
   return (
@@ -83,7 +88,7 @@ function Page() {
               <Field label="Overtime cost (ZAR)"><Input name="overtime_cost" type="number" step="0.01" defaultValue={editing?.overtime_cost ?? ""} placeholder="0" /></Field>
             </div>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
-            <Button type="submit" className="w-full">Save</Button>
+            <Button type="submit" className="w-full" disabled={upsert.isPending}>{upsert.isPending ? "Saving…" : "Save"}</Button>
           </form>
         </DialogContent>
       </Dialog>

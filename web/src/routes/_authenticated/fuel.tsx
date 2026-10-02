@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
@@ -57,9 +58,12 @@ function Page() {
     setLitres(Number(r.litres ?? 0)); setCpl(Number(r.cost_per_litre ?? 0)); setOpen(true);
   };
 
+  const once = useOneAtATime();
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // A double tap must not save twice: the second submit is ignored while the first is in flight.
+    await once(async () => {
     await upsert.mutateAsync({
       ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
       date: f.get("date"),
@@ -76,6 +80,7 @@ function Page() {
       notes: f.get("notes") || null,
     });
     setOpen(false);
+    }).catch(() => {});
   };
 
   const equipName = (id: string | null) => equipment.data?.find((e: any) => e.id === id)?.name ?? null;
@@ -205,7 +210,7 @@ function Page() {
               </Select>
             </Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
-            <Button type="submit" className="w-full">Save</Button>
+            <Button type="submit" className="w-full" disabled={upsert.isPending}>{upsert.isPending ? "Saving…" : "Save"}</Button>
           </form>
         </DialogContent>
       </Dialog>

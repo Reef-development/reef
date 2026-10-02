@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/NumberField";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
 import { Camera } from "lucide-react";
@@ -23,6 +24,7 @@ function Page() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  const once = useOneAtATime();
   const submit = useMutation({
     mutationFn: async () => {
       if (!equipId) throw new Error("Select equipment");
@@ -73,7 +75,7 @@ function Page() {
         <Input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
         {photos && <p className="text-xs text-muted-foreground">{photos.length} photo(s) selected</p>}
       </div>
-      <Button className="w-full h-14 text-base" onClick={() => submit.mutate()} disabled={submit.isPending}>
+      <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save Repair"}
       </Button>
     </div>
