@@ -30,8 +30,8 @@ type ResourceSpec = {
 
 /**
  * Registers list, get, create, update and delete for one table. Most of the platform's
- * resources are plain records, so this keeps them identical in behaviour instead of sixteen
- * hand-written copies that drift apart.
+ * resources are plain records, so this keeps them identical in behaviour instead of
+ * sixteen hand-written copies that drift apart.
  */
 export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: ResourceSpec) {
   const base = `/api/v1/${spec.name}`;
@@ -116,9 +116,7 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
         version: number;
         reason: string;
       } & Record<string, unknown>;
-      const result = await spec
-        .repo(c.var.repos)
-        .update(id, changes, version, reason, c.var.user.id);
+      const result = await spec.repo(c.var.repos).update(id, changes, version, reason);
       if (result.status === "missing") throw notFound();
       if (result.status === "stale") {
         throw new ApiError(

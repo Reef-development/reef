@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
 import { createApp } from "../src/app.js";
+import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type { HistoryEntry, Page, Repository, UpdateResult } from "../src/repositories/types.js";
 
@@ -16,8 +17,8 @@ export const USERS: Record<string, { id: string; roles: string[] }> = {
 };
 
 /**
- * The in-memory stand-in for the history table. Rows are appended, never updated or deleted.
- * Tests read it to assert a change was recorded.
+ * The in-memory stand-in for the history table. Rows are appended, never updated or
+ * deleted. Tests read it to assert a change was recorded.
  */
 export class MemoryHistory {
   rows: HistoryEntry[] = [];
@@ -34,8 +35,8 @@ export class MemoryHistory {
 }
 
 /**
- * The columns that differ between `before` and `after`. Mirrors the diff in the Supabase
- * repository, so a test can predict exactly what the history row will contain.
+ * The columns that differ between `before` and `after`. Mirrors the diff in the database
+ * trigger, so a test can predict exactly what the history row will contain.
  */
 function diff(
   before: Record<string, unknown>,
@@ -55,7 +56,10 @@ function diff(
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
 
-  constructor(private readonly history: MemoryHistory) {}
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly currentUserId: () => string | null,
+  ) {}
 
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
@@ -86,15 +90,24 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-  /** Like the database: the version check and the write happen together, with no await between. */
+
+  /**
+   * Mirrors the database trigger: if the reason is missing, throw. The real trigger
+   * raises a check_violation, which the repository translates to a 400, so a fake that
+   * just silently accepts an empty reason would hide the exact bug we are guarding
+   * against.
+   */
   async update(
     id: string,
     patch: MinePatch,
     expectedVersion: number,
     reason: string,
-    changedBy: string,
   ): Promise<UpdateResult<Mine>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
+
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
@@ -107,10 +120,12 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       before as unknown as Record<string, unknown>,
       after as unknown as Record<string, unknown>,
     );
+
+    const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
     this.history.append({
       table_name: "mines",
       row_id: id,
-      changed_by: changedBy,
+      changed_by: actor,
       reason,
       plant: null,
       old_values: old,
@@ -120,6 +135,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
 
     return { status: "updated", row: after };
   }
+
   async remove(id: string) {
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
@@ -129,7 +145,13 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
 
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
-  const mines = new MemoryMines(history);
+
+  // The fake gets a "current user id" function so it can stamp history rows with the
+  // actor the same way the trigger does (via auth.uid()). The value is set inside the
+  // repositories closure, so it changes per request.
+  let currentUserId: string | null = null;
+  const mines = new MemoryMines(history, () => currentUserId);
+
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -138,11 +160,14 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
-    repositories: (token) => ({
-      roles: { forUser: async () => USERS[token]?.roles ?? [] },
-      mines,
-      ...overrides,
-    }),
+    repositories: (token) => {
+      currentUserId = USERS[token]?.id ?? null;
+      return {
+        roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        mines,
+        ...overrides,
+      };
+    },
     log: (_msg, err) => logged.push(err),
   });
 
