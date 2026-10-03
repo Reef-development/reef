@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useList, useUpsert, useRemove } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/suppliers")({ component: P
 function Page() {
   const list = useList<any>("suppliers", "name", true);
   const upsert = useUpsert("suppliers");
+  const reason = useChangeReason();
   const remove = useRemove("suppliers");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -22,8 +24,11 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       name: f.get("name"), contact_name: f.get("contact_name") || null,
       email: f.get("email") || null, phone: f.get("phone") || null,
       notes: f.get("notes") || null,
@@ -47,6 +52,7 @@ function Page() {
               <Field label="Phone"><Input name="phone" defaultValue={editing?.phone ?? ""} /></Field>
             </div>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

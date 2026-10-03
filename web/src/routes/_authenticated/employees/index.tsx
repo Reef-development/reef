@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +36,7 @@ function Page() {
   const mines = useList<any>("mines", "name", true);
   const attendance = useList<any>("attendance", "date");
   const upsert = useUpsert("employees");
+  const reason = useChangeReason();
   const remove = useRemove("employees");
 
   const [open, setOpen] = useState(false);
@@ -50,6 +52,9 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     const idNumber = String(f.get("id_number") || "");
 
     // T11: id_number is not on `employees` anymore. It lives in a separate
@@ -57,7 +62,7 @@ function Page() {
     // fields first, then write the identity number through the RPC if the
     // user typed one.
     const savedEmployee = (await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       full_name: f.get("full_name"),
       employee_no: f.get("employee_no") || null,
       position: f.get("position") || null,
@@ -187,6 +192,7 @@ function Page() {
             </div>
             <Field label="Hire date"><Input name="hire_date" type="date" defaultValue={editing?.hire_date ?? ""} /></Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>
