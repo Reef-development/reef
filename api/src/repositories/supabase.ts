@@ -5,7 +5,6 @@ import type { Page, Repository, RoleRepository, UpdateResult } from "./types.js"
 
 type PgError = { code?: string; message: string };
 
-/** Postgres and PostgREST error codes that are the caller's fault, mapped to what they mean. */
 function translate(err: PgError): ApiError {
   switch (err.code) {
     case "42501":
@@ -19,11 +18,20 @@ function translate(err: PgError): ApiError {
       );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
+    case "23514":
+      // The history trigger raises this when the reason is missing.
+      return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
     default:
       return new ApiError("INTERNAL", err.message);
   }
 }
 
+/**
+ * The repository for a table that is updated through a stored procedure. Every write to
+ * one of these tables goes through `update_<table>`, which sets the reason on the
+ * database session. The trigger on the table reads that reason and writes the history
+ * row inside the same transaction, so an update without a reason cannot land.
+ */
 export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Row, Input, Patch> {
   constructor(
     private readonly db: SupabaseClient,
@@ -58,18 +66,31 @@ export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Ro
     return data as Row;
   }
 
-  async update(id: string, patch: Patch, expectedVersion: number): Promise<UpdateResult<Row>> {
-    // The version condition is part of the UPDATE itself, so Postgres checks it under the row
-    // lock. Of two overlapping saves with the same version, the second matches no row.
-    const { data, error } = await this.db
-      .from(this.table)
-      .update(patch as object)
-      .eq("id", id)
-      .eq("version", expectedVersion)
-      .select()
-      .maybeSingle();
+  async update(
+    id: string,
+    patch: Patch,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<UpdateResult<Row>> {
+    // Call the stored procedure, not the table. The RPC sets the reason on the session
+    // and runs the UPDATE. The trigger fires inside that transaction and writes the
+    // history row. If the reason is empty or the version is stale, the row is not
+    // returned and we can tell the caller what happened.
+    const { data, error } = await this.db.rpc(`update_${this.table}`, {
+      p_id: id,
+      p_patch: patch,
+      p_expected_version: expectedVersion,
+      p_reason: reason,
+    });
     if (error) throw translate(error);
-    if (data) return { status: "updated", row: data as Row };
+
+    const rows = (data ?? []) as Row[];
+    if (rows.length > 0) {
+      return { status: "updated", row: rows[0] };
+    }
+
+    // No row matched the id and version. Either the id does not exist, or someone else
+    // saved first. Fetch the current row to tell the difference.
     const current = await this.get(id);
     return current ? { status: "stale", current } : { status: "missing" };
   }
