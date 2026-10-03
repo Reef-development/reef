@@ -29,7 +29,8 @@ export const Route = createFileRoute("/_authenticated/employees/")({
 
 const SHIFTS = ["morning", "midday", "night"] as const;
 
-function Page() {
+// Exported so the test can mount it without going through the router.
+export function Page() {
   const employees = useList<any>("employees", "full_name", true);
   const mines = useList<any>("mines", "name", true);
   const attendance = useList<any>("attendance", "date");
