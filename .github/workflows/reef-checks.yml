@@ -12,7 +12,6 @@ on:
       - develop
 
 jobs:
-
   quick-tests:
     name: Quick Tests
     runs-on: ubuntu-latest
