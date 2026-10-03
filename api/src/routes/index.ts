@@ -3,9 +3,11 @@ import { z } from "zod";
 import { MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { ok } from "../http/envelope.js";
+import { parseWith } from "../http/body.js";
 import type { Registry } from "../registry.js";
 import { defineRoute } from "./define.js";
 import { resourceRoutes } from "./resource.js";
+import { ApiError } from "../http/errors.js";
 
 const UserId = z.string().uuid();
 const SessionId = z.string().uuid();
@@ -36,10 +38,10 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       refuses: "A missing, expired or foreign token.",
     },
     (c) =>
-  ok(c, {
-    id: c.var.user.id,
-    role: c.var.user.role,
-  }),
+      ok(c, {
+        id: c.var.user.id,
+        role: c.var.user.role,
+      }),
   );
 
   defineRoute(
@@ -75,7 +77,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       refuses: "A user id that is not a UUID, or a caller who is not an owner.",
     },
     async (c) => {
-      const userId = UserId.parse(c.req.param("userId"));
+      const userId = parseWith(UserId, c.req.param("userId"));
 
       const sessions = await c.var.repos.sessions.forUser(userId);
 
@@ -98,21 +100,12 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
         "A session id that is not a UUID, a session that does not exist or is already revoked, or a caller who is not an owner.",
     },
     async (c) => {
-      const sessionId = SessionId.parse(c.req.param("sessionId"));
+      const sessionId = parseWith(SessionId, c.req.param("sessionId"));
 
       const revoked = await c.var.repos.sessions.revoke(sessionId);
 
       if (!revoked) {
-        return c.json(
-          {
-            ok: false,
-            error: {
-              code: "NOT_FOUND",
-              message: "That sign-in does not exist or has already been revoked",
-            },
-          },
-          404,
-        );
+        throw new ApiError("NOT_FOUND", "That sign-in does not exist or has already been revoked");
       }
 
       return ok(c, {
@@ -133,7 +126,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       refuses: "A user id that is not a UUID, or a caller who is not an owner.",
     },
     async (c) => {
-      const userId = UserId.parse(c.req.param("userId"));
+      const userId = parseWith(UserId, c.req.param("userId"));
 
       const revokedCount = await c.var.repos.sessions.revokeAll(userId);
 

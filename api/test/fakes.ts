@@ -14,10 +14,7 @@ import type {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
 /** Token → user, session and roles, standing in for Supabase Auth and `user_roles`. */
-export const USERS: Record<
-  string,
-  { id: string; sessionId: string; roles: string[] }
-> = {
+export const USERS: Record<string, { id: string; sessionId: string; roles: string[] }> = {
   "owner-token": {
     id: "00000000-0000-4000-8000-000000000001",
     sessionId: "10000000-0000-4000-8000-000000000001",
@@ -46,9 +43,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
     const key = (q.sort ?? "name") as keyof Mine;
-    const sorted = [...this.rows].sort((a, b) =>
-      String(a[key]).localeCompare(String(b[key])),
-    );
+    const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
     if (q.order === "desc") sorted.reverse();
 
     const from = (q.page - 1) * q.pageSize;
@@ -85,11 +80,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 
   /** Like the database: the version check and the write happen together, with no await between. */
-  async update(
-    id: string,
-    patch: MinePatch,
-    expectedVersion: number,
-  ): Promise<UpdateResult<Mine>> {
+  async update(id: string, patch: MinePatch, expectedVersion: number): Promise<UpdateResult<Mine>> {
     await tick();
 
     const row = this.rows.find((r) => r.id === id);
@@ -127,11 +118,7 @@ class MemorySessions implements SessionRepository {
     private readonly rows: UserSession[],
   ) {}
 
-  async touch(
-    sessionId: string,
-    device: string | null,
-    address: string | null,
-  ): Promise<boolean> {
+  async touch(sessionId: string, device: string | null, address: string | null): Promise<boolean> {
     const existing = this.rows.find((row) => row.session_id === sessionId);
 
     if (existing) {
@@ -237,11 +224,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     log: (_msg, err) => logged.push(err),
   });
 
-  const call = (
-    method: string,
-    path: string,
-    opts: { token?: string; body?: unknown } = {},
-  ) =>
+  const call = (method: string, path: string, opts: { token?: string; body?: unknown } = {}) =>
     app.request(path, {
       method,
       headers: {

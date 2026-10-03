@@ -44,11 +44,7 @@ export interface SessionRepository {
    * Records the current request for this session.
    * Returns false when the session has been revoked.
    */
-  touch(
-    sessionId: string,
-    device: string | null,
-    address: string | null,
-  ): Promise<boolean>;
+  touch(sessionId: string, device: string | null, address: string | null): Promise<boolean>;
 
   /** Lists sign-ins belonging to one user. */
   forUser(userId: string): Promise<UserSession[]>;

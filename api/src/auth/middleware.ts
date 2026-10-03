@@ -38,17 +38,10 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
     address = null;
   }
 
-  const sessionActive = await repos.sessions.touch(
-    sessionId,
-    device,
-    address,
-  );
+  const sessionActive = await repos.sessions.touch(sessionId, device, address);
 
   if (!sessionActive) {
-    throw new ApiError(
-      "UNAUTHENTICATED",
-      "This sign-in has been revoked. Sign in again",
-    );
+    throw new ApiError("UNAUTHENTICATED", "This sign-in has been revoked. Sign in again");
   }
 
   const role = highestRole(await repos.roles.forUser(userId));

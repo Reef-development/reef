@@ -19,9 +19,9 @@ export function supabaseRepositories(config: Config) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     return {
-  roles: new SupabaseRoleRepository(db),
-  sessions: new SupabaseSessionRepository(db),
-  mines: new SupabaseTableRepository(db, "mines", "name"),
-};
+      roles: new SupabaseRoleRepository(db),
+      sessions: new SupabaseSessionRepository(db),
+      mines: new SupabaseTableRepository(db, "mines", "name"),
+    };
   };
 }

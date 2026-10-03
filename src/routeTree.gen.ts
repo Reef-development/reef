@@ -25,7 +25,6 @@ import { Route as AuthenticatedMinesRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedProductionRouteImport } from './routes/_authenticated/production'
 import { Route as AuthenticatedPurchaseOrdersRouteImport } from './routes/_authenticated/purchase-orders'
 import { Route as AuthenticatedReefieRouteRouteImport } from './routes/_authenticated/reefie/route'
-import { Route as AuthenticatedSessionsRouteImport } from './routes/_authenticated/sessions'
 import { Route as AuthenticatedStaticCostsRouteImport } from './routes/_authenticated/static-costs'
 import { Route as AuthenticatedSuppliersRouteImport } from './routes/_authenticated/suppliers'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
@@ -35,7 +34,6 @@ import { Route as WorkerLogFuelRouteImport } from './routes/worker/log-fuel'
 import { Route as WorkerLogProductionRouteImport } from './routes/worker/log-production'
 import { Route as WorkerLogRepairRouteImport } from './routes/worker/log-repair'
 import { Route as WorkerLogUsageRouteImport } from './routes/worker/log-usage'
-import { Route as WorkerSessionsRouteImport } from './routes/worker/sessions'
 import { Route as AuthenticatedEmployeesIndexRouteImport } from './routes/_authenticated/employees/index'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees/$employeeId'
 import { Route as AuthenticatedReefieIndexRouteImport } from './routes/_authenticated/reefie/index'
@@ -123,11 +121,6 @@ const AuthenticatedReefieRouteRoute =
     path: '/reefie',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSessionsRoute = AuthenticatedSessionsRouteImport.update({
-  id: '/sessions',
-  path: '/sessions',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedStaticCostsRoute =
   AuthenticatedStaticCostsRouteImport.update({
     id: '/static-costs',
@@ -174,11 +167,6 @@ const WorkerLogUsageRoute = WorkerLogUsageRouteImport.update({
   path: '/log-usage',
   getParentRoute: () => WorkerRouteRoute,
 } as any)
-const WorkerSessionsRoute = WorkerSessionsRouteImport.update({
-  id: '/sessions',
-  path: '/sessions',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
 const AuthenticatedEmployeesIndexRoute =
   AuthenticatedEmployeesIndexRouteImport.update({
     id: '/employees/',
@@ -220,7 +208,6 @@ export interface FileRoutesByFullPath {
   '/mines': typeof AuthenticatedMinesRoute
   '/production': typeof AuthenticatedProductionRoute
   '/purchase-orders': typeof AuthenticatedPurchaseOrdersRoute
-  '/sessions': typeof AuthenticatedSessionsRoute
   '/static-costs': typeof AuthenticatedStaticCostsRoute
   '/suppliers': typeof AuthenticatedSuppliersRoute
   '/api/chat': typeof ApiChatRoute
@@ -229,7 +216,6 @@ export interface FileRoutesByFullPath {
   '/worker/log-production': typeof WorkerLogProductionRoute
   '/worker/log-repair': typeof WorkerLogRepairRoute
   '/worker/log-usage': typeof WorkerLogUsageRoute
-  '/worker/sessions': typeof WorkerSessionsRoute
   '/worker/': typeof WorkerIndexRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/reefie/$threadId': typeof AuthenticatedReefieThreadIdRoute
@@ -250,7 +236,6 @@ export interface FileRoutesByTo {
   '/mines': typeof AuthenticatedMinesRoute
   '/production': typeof AuthenticatedProductionRoute
   '/purchase-orders': typeof AuthenticatedPurchaseOrdersRoute
-  '/sessions': typeof AuthenticatedSessionsRoute
   '/static-costs': typeof AuthenticatedStaticCostsRoute
   '/suppliers': typeof AuthenticatedSuppliersRoute
   '/api/chat': typeof ApiChatRoute
@@ -259,7 +244,6 @@ export interface FileRoutesByTo {
   '/worker/log-production': typeof WorkerLogProductionRoute
   '/worker/log-repair': typeof WorkerLogRepairRoute
   '/worker/log-usage': typeof WorkerLogUsageRoute
-  '/worker/sessions': typeof WorkerSessionsRoute
   '/worker': typeof WorkerIndexRoute
   '/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/reefie/$threadId': typeof AuthenticatedReefieThreadIdRoute
@@ -284,7 +268,6 @@ export interface FileRoutesById {
   '/_authenticated/mines': typeof AuthenticatedMinesRoute
   '/_authenticated/production': typeof AuthenticatedProductionRoute
   '/_authenticated/purchase-orders': typeof AuthenticatedPurchaseOrdersRoute
-  '/_authenticated/sessions': typeof AuthenticatedSessionsRoute
   '/_authenticated/static-costs': typeof AuthenticatedStaticCostsRoute
   '/_authenticated/suppliers': typeof AuthenticatedSuppliersRoute
   '/api/chat': typeof ApiChatRoute
@@ -293,7 +276,6 @@ export interface FileRoutesById {
   '/worker/log-production': typeof WorkerLogProductionRoute
   '/worker/log-repair': typeof WorkerLogRepairRoute
   '/worker/log-usage': typeof WorkerLogUsageRoute
-  '/worker/sessions': typeof WorkerSessionsRoute
   '/worker/': typeof WorkerIndexRoute
   '/_authenticated/employees/$employeeId': typeof AuthenticatedEmployeesEmployeeIdRoute
   '/_authenticated/reefie/$threadId': typeof AuthenticatedReefieThreadIdRoute
@@ -318,7 +300,6 @@ export interface FileRouteTypes {
     | '/mines'
     | '/production'
     | '/purchase-orders'
-    | '/sessions'
     | '/static-costs'
     | '/suppliers'
     | '/api/chat'
@@ -327,7 +308,6 @@ export interface FileRouteTypes {
     | '/worker/log-production'
     | '/worker/log-repair'
     | '/worker/log-usage'
-    | '/worker/sessions'
     | '/worker/'
     | '/employees/$employeeId'
     | '/reefie/$threadId'
@@ -348,7 +328,6 @@ export interface FileRouteTypes {
     | '/mines'
     | '/production'
     | '/purchase-orders'
-    | '/sessions'
     | '/static-costs'
     | '/suppliers'
     | '/api/chat'
@@ -357,7 +336,6 @@ export interface FileRouteTypes {
     | '/worker/log-production'
     | '/worker/log-repair'
     | '/worker/log-usage'
-    | '/worker/sessions'
     | '/worker'
     | '/employees/$employeeId'
     | '/reefie/$threadId'
@@ -381,7 +359,6 @@ export interface FileRouteTypes {
     | '/_authenticated/mines'
     | '/_authenticated/production'
     | '/_authenticated/purchase-orders'
-    | '/_authenticated/sessions'
     | '/_authenticated/static-costs'
     | '/_authenticated/suppliers'
     | '/api/chat'
@@ -390,7 +367,6 @@ export interface FileRouteTypes {
     | '/worker/log-production'
     | '/worker/log-repair'
     | '/worker/log-usage'
-    | '/worker/sessions'
     | '/worker/'
     | '/_authenticated/employees/$employeeId'
     | '/_authenticated/reefie/$threadId'
@@ -520,13 +496,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReefieRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/sessions': {
-      id: '/_authenticated/sessions'
-      path: '/sessions'
-      fullPath: '/sessions'
-      preLoaderRoute: typeof AuthenticatedSessionsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/static-costs': {
       id: '/_authenticated/static-costs'
       path: '/static-costs'
@@ -590,13 +559,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkerLogUsageRouteImport
       parentRoute: typeof WorkerRouteRoute
     }
-    '/worker/sessions': {
-      id: '/worker/sessions'
-      path: '/sessions'
-      fullPath: '/worker/sessions'
-      preLoaderRoute: typeof WorkerSessionsRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
     '/_authenticated/employees/': {
       id: '/_authenticated/employees/'
       path: '/employees'
@@ -657,7 +619,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedMinesRoute: typeof AuthenticatedMinesRoute
   AuthenticatedProductionRoute: typeof AuthenticatedProductionRoute
   AuthenticatedPurchaseOrdersRoute: typeof AuthenticatedPurchaseOrdersRoute
-  AuthenticatedSessionsRoute: typeof AuthenticatedSessionsRoute
   AuthenticatedStaticCostsRoute: typeof AuthenticatedStaticCostsRoute
   AuthenticatedSuppliersRoute: typeof AuthenticatedSuppliersRoute
   AuthenticatedEmployeesEmployeeIdRoute: typeof AuthenticatedEmployeesEmployeeIdRoute
@@ -677,7 +638,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedMinesRoute: AuthenticatedMinesRoute,
   AuthenticatedProductionRoute: AuthenticatedProductionRoute,
   AuthenticatedPurchaseOrdersRoute: AuthenticatedPurchaseOrdersRoute,
-  AuthenticatedSessionsRoute: AuthenticatedSessionsRoute,
   AuthenticatedStaticCostsRoute: AuthenticatedStaticCostsRoute,
   AuthenticatedSuppliersRoute: AuthenticatedSuppliersRoute,
   AuthenticatedEmployeesEmployeeIdRoute: AuthenticatedEmployeesEmployeeIdRoute,
@@ -693,7 +653,6 @@ interface WorkerRouteRouteChildren {
   WorkerLogProductionRoute: typeof WorkerLogProductionRoute
   WorkerLogRepairRoute: typeof WorkerLogRepairRoute
   WorkerLogUsageRoute: typeof WorkerLogUsageRoute
-  WorkerSessionsRoute: typeof WorkerSessionsRoute
   WorkerIndexRoute: typeof WorkerIndexRoute
 }
 
@@ -703,7 +662,6 @@ const WorkerRouteRouteChildren: WorkerRouteRouteChildren = {
   WorkerLogProductionRoute: WorkerLogProductionRoute,
   WorkerLogRepairRoute: WorkerLogRepairRoute,
   WorkerLogUsageRoute: WorkerLogUsageRoute,
-  WorkerSessionsRoute: WorkerSessionsRoute,
   WorkerIndexRoute: WorkerIndexRoute,
 }
 

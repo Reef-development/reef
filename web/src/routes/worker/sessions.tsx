@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/api";
+
+import { api } from "@/lib/api";
 
 type UserSession = {
   id: string;
@@ -20,62 +21,49 @@ export const Route = createFileRoute("/worker/sessions")({
 function WorkerSessionsPage() {
   const sessions = useQuery({
     queryKey: ["sessions", "mine"],
-    queryFn: () => apiRequest<UserSession[]>("/api/v1/sessions"),
+    queryFn: () => api<UserSession[]>("/api/v1/sessions").then((res) => res.data),
   });
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Active Sign-ins</h1>
+
         <p className="text-sm text-muted-foreground mt-1">
           Devices currently signed in to your REEF account.
         </p>
       </div>
 
       {sessions.isLoading && (
-        <p className="text-sm text-muted-foreground">
-          Loading active sign-ins...
-        </p>
+        <p className="text-sm text-muted-foreground">Loading active sign-ins...</p>
       )}
 
       {sessions.isError && (
         <p className="text-sm text-destructive">
-          {sessions.error instanceof Error
-            ? sessions.error.message
-            : "Could not load sign-ins"}
+          {sessions.error instanceof Error ? sessions.error.message : "Could not load sign-ins"}
         </p>
       )}
 
       <div className="space-y-3">
         {sessions.data?.map((session) => (
-          <div
-            key={session.id}
-            className="rounded-lg border p-4 space-y-3"
-          >
+          <div key={session.id} className="rounded-lg border p-4 space-y-3">
             <div className="space-y-1">
-              <p className="font-medium">
-                {session.device ?? "Unknown device"}
-              </p>
+              <p className="font-medium">{session.device ?? "Unknown device"}</p>
 
               <p className="text-sm text-muted-foreground">
                 Address: {session.address ?? "Unknown"}
               </p>
 
               <p className="text-sm text-muted-foreground">
-                Last used:{" "}
-                {new Date(session.last_used_at).toLocaleString()}
+                Last used: {new Date(session.last_used_at).toLocaleString()}
               </p>
             </div>
           </div>
         ))}
 
-        {!sessions.isLoading &&
-          !sessions.isError &&
-          sessions.data?.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No active sign-ins found.
-            </p>
-          )}
+        {!sessions.isLoading && !sessions.isError && sessions.data?.length === 0 && (
+          <p className="text-sm text-muted-foreground">No active sign-ins found.</p>
+        )}
       </div>
     </div>
   );

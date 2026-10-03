@@ -30,7 +30,12 @@ ON public.user_sessions
 FOR SELECT
 TO authenticated
 USING (
-  user_id = auth.uid()
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND role = 'owner'
+  )
 );
 
 CREATE POLICY "Owners can view all sessions"
@@ -38,7 +43,12 @@ ON public.user_sessions
 FOR SELECT
 TO authenticated
 USING (
-  public.has_role(auth.uid(), 'owner')
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND role = 'owner'
+  )
 );
 
 CREATE POLICY "Owners can view all profiles"
@@ -46,7 +56,12 @@ ON public.profiles
 FOR SELECT
 TO authenticated
 USING (
-  public.has_role(auth.uid(), 'owner')
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND role = 'owner'
+  )
 );
 
 CREATE OR REPLACE FUNCTION public.touch_user_session(
@@ -138,7 +153,12 @@ ON public.session_revocation_history
 FOR SELECT
 TO authenticated
 USING (
-  public.has_role(auth.uid(), 'owner')
+  EXISTS (
+    SELECT 1
+    FROM public.user_roles
+    WHERE user_id = auth.uid()
+      AND role = 'owner'
+  )
 );
 
 

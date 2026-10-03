@@ -86,13 +86,9 @@ describe("active sign-ins", () => {
 
     const workerId = USERS["worker-token"].id;
 
-    const res = await call(
-      "GET",
-      `/api/v1/users/${workerId}/sessions`,
-      {
-        token: "owner-token",
-      },
-    );
+    const res = await call("GET", `/api/v1/users/${workerId}/sessions`, {
+      token: "owner-token",
+    });
 
     expect(res.status).toBe(200);
 
@@ -110,13 +106,9 @@ describe("active sign-ins", () => {
   it("refuses a non-owner trying to manage another user's sign-ins", async () => {
     const workerId = USERS["worker-token"].id;
 
-    const res = await testApp().call(
-      "GET",
-      `/api/v1/users/${workerId}/sessions`,
-      {
-        token: "manager-token",
-      },
-    );
+    const res = await testApp().call("GET", `/api/v1/users/${workerId}/sessions`, {
+      token: "manager-token",
+    });
 
     expect(res.status).toBe(403);
   });
@@ -130,13 +122,9 @@ describe("active sign-ins", () => {
 
     const sessionId = USERS["worker-token"].sessionId;
 
-    const revoke = await call(
-      "DELETE",
-      `/api/v1/sessions/${sessionId}`,
-      {
-        token: "owner-token",
-      },
-    );
+    const revoke = await call("DELETE", `/api/v1/sessions/${sessionId}`, {
+      token: "owner-token",
+    });
 
     expect(revoke.status).toBe(200);
 
@@ -160,13 +148,9 @@ describe("active sign-ins", () => {
 
     const workerId = USERS["worker-token"].id;
 
-    const revoke = await call(
-      "DELETE",
-      `/api/v1/users/${workerId}/sessions`,
-      {
-        token: "owner-token",
-      },
-    );
+    const revoke = await call("DELETE", `/api/v1/users/${workerId}/sessions`, {
+      token: "owner-token",
+    });
 
     expect(revoke.status).toBe(200);
 
@@ -197,8 +181,7 @@ describe("errors", () => {
 
   it("hides the cause of an unexpected failure from the caller but logs it", async () => {
     const boom = {
-      list: async () =>
-        Promise.reject(new Error("connection string leaked here")),
+      list: async () => Promise.reject(new Error("connection string leaked here")),
     };
 
     const { call, logged } = testApp({
@@ -210,9 +193,7 @@ describe("errors", () => {
     });
 
     expect(res.status).toBe(500);
-    expect(JSON.stringify(await res.json())).not.toContain(
-      "connection string",
-    );
+    expect(JSON.stringify(await res.json())).not.toContain("connection string");
     expect(logged).toHaveLength(1);
   });
 

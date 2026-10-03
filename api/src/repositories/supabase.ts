@@ -100,11 +100,7 @@ export class SupabaseRoleRepository implements RoleRepository {
 export class SupabaseSessionRepository implements SessionRepository {
   constructor(private readonly db: SupabaseClient) {}
 
-  async touch(
-    sessionId: string,
-    device: string | null,
-    address: string | null,
-  ): Promise<boolean> {
+  async touch(sessionId: string, device: string | null, address: string | null): Promise<boolean> {
     const { data, error } = await this.db.rpc("touch_user_session", {
       _session_id: sessionId,
       _device: device,
