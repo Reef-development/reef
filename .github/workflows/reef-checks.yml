@@ -1,4 +1,4 @@
-﻿name: REEF Checks
+name: REEF Checks
 
 on:
   push:
@@ -53,6 +53,16 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          RLS_USER_A_EMAIL: ${{ secrets.RLS_USER_A_EMAIL }}
+          RLS_USER_A_PASSWORD: ${{ secrets.RLS_USER_A_PASSWORD }}
+          RLS_USER_B_EMAIL: ${{ secrets.RLS_USER_B_EMAIL }}
+          RLS_USER_B_PASSWORD: ${{ secrets.RLS_USER_B_PASSWORD }}
+          RLS_MANAGER_A_EMAIL: ${{ secrets.RLS_MANAGER_A_EMAIL }}
+          RLS_MANAGER_A_PASSWORD: ${{ secrets.RLS_MANAGER_A_PASSWORD }}
+          RLS_MANAGER_B_EMAIL: ${{ secrets.RLS_MANAGER_B_EMAIL }}
+          RLS_MANAGER_B_PASSWORD: ${{ secrets.RLS_MANAGER_B_PASSWORD }}
+          RLS_OWNER_EMAIL: ${{ secrets.RLS_OWNER_EMAIL }}
+          RLS_OWNER_PASSWORD: ${{ secrets.RLS_OWNER_PASSWORD }}
 
   typecheck:
     name: Type Check
