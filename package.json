@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "tanstack_start_ts",
   "private": true,
   "sideEffects": false,
@@ -9,10 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-
-
-"lint": "eslint api shared/src tests",
-
+    "lint": "eslint api shared/src tests",
     "format": "prettier --write .",
     "test": "node --env-file-if-exists=.env --test",
     "test:quick": "node --test tests/quick.test.mjs",
@@ -92,6 +89,7 @@
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "2.9.1",
     "@types/node": "^22.16.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.2.0",
@@ -102,6 +100,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
+    "pg": "^8.23.1",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
