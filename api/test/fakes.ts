@@ -4,8 +4,14 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
   Stock,
   StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
   StockPatch,
 } from "@reef/shared";
 import { createApp } from "../src/app.js";
@@ -170,9 +176,165 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
   }
 }
 
+/** The fake stock-level repository. Mirrors the real one's plant filter and version check. */
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
+  rows: StockLevel[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof StockLevel;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+
+  async get(id: string, user: UserContext): Promise<StockLevel | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+
+  async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: StockLevel = {
+      id: randomUUID(),
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+
+  async update(
+    id: string,
+    patch: StockLevelPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<StockLevel>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+/** The fake purchase-order repository. Mirrors the real one's plant filter and version check. */
+export class MemoryPurchaseOrder implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
+  rows: PurchaseOrder[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof PurchaseOrder;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+
+  async get(id: string, user: UserContext): Promise<PurchaseOrder | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+
+  async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      supplier_id: null,
+      status: "draft",
+      total_cost: 0,
+      notes: null,
+      approved_at: null,
+      ordered_at: null,
+      received_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+
+  async update(
+    id: string,
+    patch: PurchaseOrderPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<PurchaseOrder>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const mines = new MemoryMines();
   const stock = new MemoryStock();
+  const stockLevels = new MemoryStockLevel();
+  const purchaseOrders = new MemoryPurchaseOrder();
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -188,6 +350,8 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       },
       mines,
       stock,
+      stockLevels,
+      purchaseOrders,
       ...overrides,
     }),
     log: (_msg, err) => logged.push(err),
@@ -208,5 +372,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, stock, logged, call };
+  return { app, registry, mines, stock, stockLevels, purchaseOrders, logged, call };
 }

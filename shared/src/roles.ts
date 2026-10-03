@@ -18,12 +18,17 @@ export function highestRole(held: readonly string[]): Role | null {
  * Who may do what, per resource. This is the single permission table: the API enforces it on
  * every route, the endpoint list prints it, and the web app reads it to decide what to show.
  * Row-level security in the database stays underneath as the second line of defence.
+ *
+ * Purchase orders are management documents — REEF confirmed that employees may not place
+ * them, so both reading and writing are restricted to owner and manager.
  */
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
   "stock:read": ["owner", "manager", "worker"],
   "stock:write": ["owner", "manager"],
+  "po:read": ["owner", "manager"],
+  "po:write": ["owner", "manager"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
