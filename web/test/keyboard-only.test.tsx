@@ -55,6 +55,12 @@ describe("T20: a capture form completed with the keyboard alone", () => {
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: "Tons produced" }));
     await user.keyboard("240");
+    // Under a busy test run the screen can lag the keys; wait until it shows all three digits.
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("spinbutton", { name: "Tons produced" }) as HTMLInputElement).value,
+      ).toBe("240"),
+    );
 
     await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /Save/ }));

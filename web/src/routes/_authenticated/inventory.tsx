@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useList, useUpsert, useRemove, ZAR, NUM } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -17,6 +18,7 @@ function Page() {
   const list = useList<any>("stock_items", "name", true);
   const suppliers = useList<any>("suppliers", "name", true);
   const upsert = useUpsert("stock_items");
+  const reason = useChangeReason();
   const remove = useRemove("stock_items");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -28,8 +30,11 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       name: f.get("name"),
       sku: f.get("sku") || null,
       unit: f.get("unit") || "unit",
@@ -68,6 +73,7 @@ function Page() {
               <Field label="Reorder qty"><Input name="reorder_qty" type="number" step="0.01" defaultValue={editing?.reorder_qty ?? ""} placeholder="0" /></Field>
             </div>
             <Field label="Unit cost (ZAR)"><Input name="unit_cost" type="number" step="0.01" defaultValue={editing?.unit_cost ?? ""} placeholder="0" /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

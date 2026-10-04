@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
@@ -18,6 +19,7 @@ function Page() {
   const list = useList<any>("production_logs", "date");
   const mines = useList<any>("mines", "name", true);
   const upsert = useUpsert("production_logs");
+  const reason = useChangeReason();
   const remove = useRemove("production_logs");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -31,11 +33,14 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     // A double tap must not save twice: the second submit is ignored while the first is in flight.
     await once(async () => {
     if (!mineId) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
+      ...(editing?.id ? { id: editing.id, version: editing.version, changeReason: why } : {}),
       mine_id: mineId,
       date: f.get("date"),
       shift,
@@ -88,6 +93,7 @@ function Page() {
               <Field label="Overtime cost (ZAR)"><Input name="overtime_cost" type="number" step="0.01" defaultValue={editing?.overtime_cost ?? ""} placeholder="0" /></Field>
             </div>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full" disabled={upsert.isPending}>{upsert.isPending ? "Saving…" : "Save"}</Button>
           </form>
         </DialogContent>
