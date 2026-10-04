@@ -19,6 +19,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedDowntimeRouteImport } from './routes/_authenticated/downtime'
 import { Route as AuthenticatedEquipmentRouteImport } from './routes/_authenticated/equipment'
 import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
+import { Route as AuthenticatedHistoryRouteImport } from './routes/_authenticated/history'
 import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
 import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
 import { Route as AuthenticatedMinesRouteImport } from './routes/_authenticated/mines'
@@ -88,6 +89,11 @@ const AuthenticatedEquipmentRoute = AuthenticatedEquipmentRouteImport.update({
 const AuthenticatedFuelRoute = AuthenticatedFuelRouteImport.update({
   id: '/fuel',
   path: '/fuel',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHistoryRoute = AuthenticatedHistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
@@ -215,6 +221,7 @@ export interface FileRoutesByFullPath {
   '/downtime': typeof AuthenticatedDowntimeRoute
   '/equipment': typeof AuthenticatedEquipmentRoute
   '/fuel': typeof AuthenticatedFuelRoute
+  '/history': typeof AuthenticatedHistoryRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/mines': typeof AuthenticatedMinesRoute
@@ -245,6 +252,7 @@ export interface FileRoutesByTo {
   '/downtime': typeof AuthenticatedDowntimeRoute
   '/equipment': typeof AuthenticatedEquipmentRoute
   '/fuel': typeof AuthenticatedFuelRoute
+  '/history': typeof AuthenticatedHistoryRoute
   '/inventory': typeof AuthenticatedInventoryRoute
   '/maintenance': typeof AuthenticatedMaintenanceRoute
   '/mines': typeof AuthenticatedMinesRoute
@@ -279,6 +287,7 @@ export interface FileRoutesById {
   '/_authenticated/downtime': typeof AuthenticatedDowntimeRoute
   '/_authenticated/equipment': typeof AuthenticatedEquipmentRoute
   '/_authenticated/fuel': typeof AuthenticatedFuelRoute
+  '/_authenticated/history': typeof AuthenticatedHistoryRoute
   '/_authenticated/inventory': typeof AuthenticatedInventoryRoute
   '/_authenticated/maintenance': typeof AuthenticatedMaintenanceRoute
   '/_authenticated/mines': typeof AuthenticatedMinesRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/downtime'
     | '/equipment'
     | '/fuel'
+    | '/history'
     | '/inventory'
     | '/maintenance'
     | '/mines'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | '/downtime'
     | '/equipment'
     | '/fuel'
+    | '/history'
     | '/inventory'
     | '/maintenance'
     | '/mines'
@@ -376,6 +387,7 @@ export interface FileRouteTypes {
     | '/_authenticated/downtime'
     | '/_authenticated/equipment'
     | '/_authenticated/fuel'
+    | '/_authenticated/history'
     | '/_authenticated/inventory'
     | '/_authenticated/maintenance'
     | '/_authenticated/mines'
@@ -476,6 +488,13 @@ declare module '@tanstack/react-router' {
       path: '/fuel'
       fullPath: '/fuel'
       preLoaderRoute: typeof AuthenticatedFuelRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/history': {
+      id: '/_authenticated/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof AuthenticatedHistoryRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/inventory': {
@@ -652,6 +671,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDowntimeRoute: typeof AuthenticatedDowntimeRoute
   AuthenticatedEquipmentRoute: typeof AuthenticatedEquipmentRoute
   AuthenticatedFuelRoute: typeof AuthenticatedFuelRoute
+  AuthenticatedHistoryRoute: typeof AuthenticatedHistoryRoute
   AuthenticatedInventoryRoute: typeof AuthenticatedInventoryRoute
   AuthenticatedMaintenanceRoute: typeof AuthenticatedMaintenanceRoute
   AuthenticatedMinesRoute: typeof AuthenticatedMinesRoute
@@ -672,6 +692,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDowntimeRoute: AuthenticatedDowntimeRoute,
   AuthenticatedEquipmentRoute: AuthenticatedEquipmentRoute,
   AuthenticatedFuelRoute: AuthenticatedFuelRoute,
+  AuthenticatedHistoryRoute: AuthenticatedHistoryRoute,
   AuthenticatedInventoryRoute: AuthenticatedInventoryRoute,
   AuthenticatedMaintenanceRoute: AuthenticatedMaintenanceRoute,
   AuthenticatedMinesRoute: AuthenticatedMinesRoute,
