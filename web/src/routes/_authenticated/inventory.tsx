@@ -7,6 +7,7 @@ import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
@@ -68,8 +69,9 @@ function Page() {
   const openNew = () => { setEditing(null); setSupplierId(""); setOpen(true); };
   const openEdit = (r: StockOnHand) => { setEditing(r); setSupplierId(r.supplier_id ?? ""); setOpen(true); };
 
+  const reason = useChangeReason();
   const save = useMutation({
-    mutationFn: async (f: FormData) => {
+    mutationFn: async ({ f, why }: { f: FormData; why: string | null }) => {
       const catalogue = {
         name: f.get("name"),
         sku: f.get("sku") || null,
@@ -85,12 +87,12 @@ function Page() {
       if (editing) {
         await api(`/api/v1/stock/${editing.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ ...catalogue, version: editing.version }),
+          body: JSON.stringify({ ...catalogue, version: editing.version, reason: why }),
         });
         if (editing.level) {
           await api(`/api/v1/stock-levels/${editing.level.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ ...levels, version: editing.level.version }),
+            body: JSON.stringify({ ...levels, version: editing.level.version, reason: why }),
           });
         } else {
           await api("/api/v1/stock-levels", {
@@ -130,7 +132,12 @@ function Page() {
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    void once(() => save.mutateAsync(f)).catch(() => {});
+    void once(async () => {
+      // Changing a stock item needs a reason, which the history keeps (T6, T7). Adding one does not.
+      const why = editing ? await reason.confirm() : null;
+      if (editing && why === null) return;
+      await save.mutateAsync({ f, why });
+    }).catch(() => {});
   };
 
   const supplierName = (id: string | null) => suppliers.data?.find((s) => s.id === id)?.name ?? "—";
@@ -191,6 +198,7 @@ function Page() {
               <Field label="Reorder qty"><Input name="reorder_qty" type="number" step="0.01" defaultValue={editing?.reorder_qty ?? ""} placeholder="0" /></Field>
             </div>
             <Field label="Unit cost (ZAR)"><Input name="unit_cost" type="number" step="0.01" defaultValue={editing?.unit_cost ?? ""} placeholder="0" /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full" disabled={save.isPending}>{save.isPending ? "Saving…" : "Save"}</Button>
           </form>
         </DialogContent>

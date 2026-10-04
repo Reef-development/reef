@@ -360,8 +360,12 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     patch: StockPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<Stock>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -430,8 +434,12 @@ export class MemoryStockLevel implements ScopedRepository<
     patch: StockLevelPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<StockLevel>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -504,8 +512,12 @@ export class MemoryPurchaseOrder implements ScopedRepository<
     patch: PurchaseOrderPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<PurchaseOrder>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };

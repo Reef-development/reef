@@ -233,6 +233,54 @@ describe("T14A: another plant's item is 'not found', not an error", () => {
   });
 });
 
+describe("T14A: changing a stock item needs a reason", () => {
+  beforeEach(() => {
+    me = KRIEL_MANAGER;
+  });
+
+  it("will not save an edit without a reason", async () => {
+    const { user } = await inventory();
+    await user.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    expect(
+      await within(dialog).findByText("A reason is required when changing a record"),
+    ).toBeTruthy();
+    expect(sent.filter((s) => s.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("sends the reason with both the item and its plant level", async () => {
+    const { user } = await inventory();
+    await user.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: "Qty on hand" }), {
+      target: { value: "7" },
+    });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Reason for this change" }), {
+      target: { value: "Recount after the stocktake" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(sent.filter((s) => s.method === "PATCH")).toHaveLength(2));
+    const [item, level] = sent.filter((s) => s.method === "PATCH");
+    expect(item).toMatchObject({
+      to: "/api/v1/stock/i1",
+      body: { reason: "Recount after the stocktake" },
+    });
+    expect(level).toMatchObject({
+      to: "/api/v1/stock-levels/level-i1",
+      body: { qty_on_hand: 7, reason: "Recount after the stocktake" },
+    });
+  });
+
+  it("does not ask for a reason when adding an item", async () => {
+    const { user } = await inventory();
+    await user.click(await screen.findByRole("button", { name: /New stock item/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("textbox", { name: "Reason for this change" })).toBeNull();
+  });
+});
+
 describe("T14A: no plant rule is decided on the screen", () => {
   it("no screen compares a row's plant with the signed-in person's plant", () => {
     const files: string[] = [];
