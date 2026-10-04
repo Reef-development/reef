@@ -157,6 +157,34 @@ jobs:
         working-directory: api
         run: npm run endpoints:check
 
+  web-tests:
+    name: Web Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            shared/package-lock.json
+            web/package-lock.json
+
+      - name: Build shared
+        working-directory: shared
+        run: npm ci && npm run build
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Web tests
+        working-directory: web
+        run: npm test
+
   secrets-check:
     name: Secrets Check
     runs-on: ubuntu-latest
