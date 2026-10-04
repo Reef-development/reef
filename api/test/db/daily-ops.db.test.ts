@@ -290,12 +290,14 @@ describe("T14: the stock rules work on each plant's own level", () => {
   it("adds a received delivery to the plant's level", async () => {
     const id = await newItem("Idler", "Kriel", 1, 0, 0);
     const po = await db.query<{ id: string }>(
-      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'Kriel') RETURNING id",
+      "INSERT INTO purchase_orders (plant) VALUES ('Kriel') RETURNING id",
     );
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 8, 50)",
       [po.rows[0].id, id],
     );
+    // Lines go on while it is a draft; then it is approved and received.
+    await db.query("UPDATE purchase_orders SET status = 'approved' WHERE id = $1", [po.rows[0].id]);
     await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
     expect(await qty(id)).toBe(9);
   });
