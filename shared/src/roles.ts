@@ -1,12 +1,9 @@
-/**
- * The three roles the platform actually uses. The database enum `app_role` still carries
- * `supervisor` and `stock_controller` from the first migration; nothing assigns them and the
- * API treats a user holding only those as having no role.
+﻿/**
+ * The three roles the platform actually uses.
  */
 export const ROLES = ["owner", "manager", "worker"] as const;
 export type Role = (typeof ROLES)[number];
 
-/** Highest role wins when a user holds several rows in `user_roles`. */
 export function highestRole(held: readonly string[]): Role | null {
   for (const role of ROLES) {
     if (held.includes(role)) return role;
@@ -14,15 +11,17 @@ export function highestRole(held: readonly string[]): Role | null {
   return null;
 }
 
-/**
- * Who may do what, per resource. This is the single permission table: the API enforces it on
- * every route, the endpoint list prints it, and the web app reads it to decide what to show.
- * Row-level security in the database stays underneath as the second line of defence.
- */
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
-  // Managers see only their own plant's changes; the database enforces that part.
+  "suppliers:read": ["owner", "manager"],
+  "suppliers:write": ["owner", "manager"],
+  "clients:read": ["owner", "manager"],
+  "clients:write": ["owner", "manager"],
+  "stock:read": ["owner", "manager", "worker"],
+  "stock:write": ["owner", "manager"],
+  "po:read": ["owner", "manager"],
+  "po:write": ["owner", "manager"],
   "history:read": ["owner", "manager"],
 } as const satisfies Record<string, readonly Role[]>;
 

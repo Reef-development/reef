@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+import { SupabaseClientRepository } from "../repositories/clients.js";
+import { SupabasePurchaseOrderRepository } from "../repositories/purchase-orders.js";
+import { SupabaseStockLevelRepository } from "../repositories/stock-levels.js";
+import { SupabaseStockRepository } from "../repositories/stock.js";
+import { SupabaseSupplierRepository } from "../repositories/suppliers.js";
 import {
   SupabaseHistoryRepository,
   SupabaseRoleRepository,
@@ -22,6 +27,11 @@ export function supabaseRepositories(config: Config) {
       roles: new SupabaseRoleRepository(db),
       history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
+      suppliers: new SupabaseSupplierRepository(db),
+      clients: new SupabaseClientRepository(db),
+      stock: new SupabaseStockRepository(db),
+      stockLevels: new SupabaseStockLevelRepository(db),
+      purchaseOrders: new SupabasePurchaseOrderRepository(db),
     };
   };
 }
