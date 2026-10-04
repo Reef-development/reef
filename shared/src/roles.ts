@@ -23,6 +23,8 @@ export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
   "sessions:manage": ["owner"],
+  // Managers see only their own plant's changes; the database enforces that part.
+  "history:read": ["owner", "manager"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

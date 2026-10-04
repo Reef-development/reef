@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
+import type { HistoryQuery, ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
 import { createApp } from "../src/app.js";
+import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type {
+  HistoryEntry,
+  HistoryRepository,
   Page,
   Repository,
   SessionRepository,
@@ -37,8 +40,58 @@ export const USERS: Record<string, { id: string; sessionId: string; roles: strin
   },
 };
 
+/**
+ * The in-memory stand-in for the history table. Rows are appended, never updated or
+ * deleted. Tests read it to assert a change was recorded.
+ */
+export class MemoryHistory implements HistoryRepository {
+  rows: HistoryEntry[] = [];
+
+  async list(q: HistoryQuery): Promise<Page<HistoryEntry>> {
+    const matching = this.rows
+      .filter((r) => (!q.table || r.table_name === q.table) && (!q.row_id || r.row_id === q.row_id))
+      .reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: matching.slice(from, from + q.pageSize), total: matching.length };
+  }
+
+  append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
+    const full: HistoryEntry = {
+      id: randomUUID(),
+      changed_at: new Date().toISOString(),
+      ...entry,
+    };
+    this.rows.push(full);
+    return full;
+  }
+}
+
+/**
+ * The columns that differ between `before` and `after`. Mirrors the diff in the database
+ * trigger, so a test can predict exactly what the history row will contain.
+ */
+function diff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): { old: Record<string, unknown>; next: Record<string, unknown> } {
+  const old: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      old[key] = before[key];
+      next[key] = after[key];
+    }
+  }
+  return { old, next };
+}
+
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
+
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly currentUserId: () => string | null,
+  ) {}
 
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
@@ -79,30 +132,50 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     return row;
   }
 
-  /** Like the database: the version check and the write happen together, with no await between. */
-  async update(id: string, patch: MinePatch, expectedVersion: number): Promise<UpdateResult<Mine>> {
+  /**
+   * Mirrors update_versioned: if the reason is missing, throw. The real procedure
+   * raises a check_violation, which the repository translates to a 400, so a fake that
+   * just silently accepts an empty reason would hide the exact bug we are guarding
+   * against.
+   */
+  async update(
+    id: string,
+    patch: MinePatch,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<UpdateResult<Mine>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
 
     const row = this.rows.find((r) => r.id === id);
 
     if (!row) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
 
-    if (row.version !== expectedVersion) {
-      return {
-        status: "stale",
-        current: { ...row },
-      };
-    }
+    const before = { ...row };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    const after = { ...row };
 
-    Object.assign(row, patch, {
-      version: row.version + 1,
-      updated_at: new Date().toISOString(),
+    const { old, next } = diff(
+      before as unknown as Record<string, unknown>,
+      after as unknown as Record<string, unknown>,
+    );
+
+    const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
+    this.history.append({
+      table_name: "mines",
+      row_id: id,
+      changed_by: actor,
+      reason,
+      plant: null,
+      old_values: old,
+      new_values: next,
+      version: after.version,
     });
 
-    return {
-      status: "updated",
-      row: { ...row },
-    };
+    return { status: "updated", row: after };
   }
 
   async remove(id: string) {
@@ -185,7 +258,14 @@ class MemorySessions implements SessionRepository {
 }
 
 export function testApp(overrides: Partial<Repositories> = {}) {
-  const mines = new MemoryMines();
+  const history = new MemoryHistory();
+
+  // The fake gets a "current user id" function so it can stamp history rows with the
+  // actor the same way the trigger does (via auth.uid()). The value is set inside the
+  // repositories closure, so it changes per request.
+  let currentUserId: string | null = null;
+  const mines = new MemoryMines(history, () => currentUserId);
+
   const sessionRows: UserSession[] = [];
   const logged: unknown[] = [];
 
@@ -204,23 +284,17 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         sessionId: user.sessionId,
       };
     },
-
     repositories: (token) => {
       const user = USERS[token];
-
+      currentUserId = user?.id ?? null;
       return {
-        roles: {
-          forUser: async () => user?.roles ?? [],
-        },
-
+        roles: { forUser: async () => user?.roles ?? [] },
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
-
+        history,
         mines,
-
         ...overrides,
       };
     },
-
     log: (_msg, err) => logged.push(err),
   });
 
@@ -247,12 +321,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return {
-    app,
-    registry,
-    mines,
-    sessionRows,
-    logged,
-    call,
-  };
+  return { app, registry, mines, history, sessionRows, logged, call };
 }

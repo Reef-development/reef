@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
 import {
+  SupabaseHistoryRepository,
   SupabaseRoleRepository,
   SupabaseSessionRepository,
   SupabaseTableRepository,
@@ -21,6 +22,7 @@ export function supabaseRepositories(config: Config) {
     return {
       roles: new SupabaseRoleRepository(db),
       sessions: new SupabaseSessionRepository(db),
+      history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
     };
   };

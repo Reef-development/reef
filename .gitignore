@@ -32,7 +32,7 @@ dist-ssr
 *.sln
 *.sw?
 
-# Per-app environment files (never commit)
-api/.env
-web/.env
+# Local environment files
 .env
+web/.env
+api/.env
