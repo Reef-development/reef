@@ -43,7 +43,7 @@ function Page() {
       <PageHeader title="Clients" description="Mining companies Reef has contracts with." actions={
         <Button onClick={() => { setEditing(null); setOpen(true); }}><Plus className="w-4 h-4 mr-1" />New client</Button>
       } />
-      <ResourceDialog title="client" open={open} onOpenChange={setOpen} editing={!!editing} trigger={<span />}>
+      <ResourceDialog title="client" open={open} onOpenChange={setOpen} editing={!!editing} trigger={null}>
         {() => (
           <form onSubmit={onSubmit} className="space-y-3">
             <Field label="Name"><Input name="name" required defaultValue={editing?.name} /></Field>

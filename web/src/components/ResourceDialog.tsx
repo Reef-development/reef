@@ -7,7 +7,8 @@ export function ResourceDialog({
   title, trigger, children, onSave, editing, open: openProp, onOpenChange,
 }: {
   title: string;
-  trigger?: ReactNode;
+  /** null: the screen opens the dialog itself, so no trigger is rendered. */
+  trigger?: ReactNode | null;
   children: (close: () => void) => ReactNode;
   onSave?: () => void | Promise<void>;
   editing?: boolean;
@@ -19,7 +20,7 @@ export function ResourceDialog({
   const setOpen = onOpenChange ?? setInternal;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {trigger !== undefined ? (
+      {trigger === null ? null : trigger !== undefined ? (
         <DialogTrigger asChild>{trigger}</DialogTrigger>
       ) : (
         <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>

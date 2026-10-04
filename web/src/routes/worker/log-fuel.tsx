@@ -57,19 +57,19 @@ function Page() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Fuel Slip</h1>
       <div className="space-y-2">
-        <Label>Vehicle / tool</Label>
+        <Label htmlFor="log-fuel-vehicle-tool">Vehicle / tool</Label>
         <Select value={equipId} onValueChange={setEquipId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select vehicle" /></SelectTrigger>
+          <SelectTrigger id="log-fuel-vehicle-tool" className="h-12 text-base"><SelectValue placeholder="Select vehicle" /></SelectTrigger>
           <SelectContent>
             {equipment.data?.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Input className="h-12" placeholder="Or type vehicle / tool name" value={label} onChange={(e) => setLabel(e.target.value)} />
+        <Input className="h-12" aria-label="Vehicle or tool not in the list" placeholder="Or type vehicle / tool name" value={label} onChange={(e) => setLabel(e.target.value)} />
       </div>
       <div className="space-y-2">
-        <Label>Mine</Label>
+        <Label htmlFor="log-fuel-mine">Mine</Label>
         <Select value={mineId} onValueChange={setMineId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select mine" /></SelectTrigger>
+          <SelectTrigger id="log-fuel-mine" className="h-12 text-base"><SelectValue placeholder="Select mine" /></SelectTrigger>
           <SelectContent>
             {mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
           </SelectContent>
@@ -77,22 +77,22 @@ function Page() {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
-          <Label>Litres</Label>
-          <NumberField step="0.01" className="h-12 text-lg" value={litres} onValueChange={setLitres} />
+          <Label htmlFor="log-fuel-litres">Litres</Label>
+          <NumberField id="log-fuel-litres" step="0.01" className="h-12 text-lg" value={litres} onValueChange={setLitres} />
         </div>
         <div className="space-y-2">
-          <Label>Rand / litre</Label>
-          <NumberField step="0.01" className="h-12 text-lg" value={cpl} onValueChange={setCpl} />
+          <Label htmlFor="log-fuel-rand-litre">Rand / litre</Label>
+          <NumberField id="log-fuel-rand-litre" step="0.01" className="h-12 text-lg" value={cpl} onValueChange={setCpl} />
         </div>
       </div>
       <div className="text-sm text-muted-foreground">Total: <span className="num-mono text-foreground">{ZAR(litres * cpl)}</span></div>
       <div className="space-y-2">
-        <Label>Odometer / hour reading</Label>
-        <Input type="number" inputMode="decimal" step="0.1" className="h-12 text-lg" value={odo} onChange={(e) => setOdo(e.target.value)} />
+        <Label htmlFor="log-fuel-odometer-hour-reading">Odometer / hour reading</Label>
+        <Input id="log-fuel-odometer-hour-reading" type="number" inputMode="decimal" step="0.1" className="h-12 text-lg" value={odo} onChange={(e) => setOdo(e.target.value)} />
       </div>
       <div className="space-y-2">
-        <Label className="flex items-center gap-2"><Camera className="w-4 h-4" />Slip photo</Label>
-        <Input type="file" accept="image/*" capture="environment" multiple className="h-12" onChange={(e) => setPhotos(e.target.files)} />
+        <Label htmlFor="log-fuel-slip-photo" className="flex items-center gap-2"><Camera className="w-4 h-4" />Slip photo</Label>
+        <Input id="log-fuel-slip-photo" type="file" accept="image/*" capture="environment" multiple className="h-12" onChange={(e) => setPhotos(e.target.files)} />
       </div>
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}

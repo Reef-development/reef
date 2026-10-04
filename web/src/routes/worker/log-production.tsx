@@ -42,15 +42,15 @@ function Page() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Production</h1>
       <div className="space-y-2">
-        <Label>Mine</Label>
+        <Label htmlFor="log-production-mine">Mine</Label>
         <Select value={mineId} onValueChange={setMineId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select mine" /></SelectTrigger>
+          <SelectTrigger id="log-production-mine" className="h-12 text-base"><SelectValue placeholder="Select mine" /></SelectTrigger>
           <SelectContent>{mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>Tons produced</Label>
-        <NumberField step="0.01" className="h-12 text-lg" value={tons} onValueChange={setTons} />
+        <Label htmlFor="log-production-tons-produced">Tons produced</Label>
+        <NumberField id="log-production-tons-produced" step="0.01" className="h-12 text-lg" value={tons} onValueChange={setTons} />
       </div>
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save Production"}
