@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/NumberField";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/worker/log-usage")({ component: Page });
@@ -19,6 +20,7 @@ function Page() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  const once = useOneAtATime();
   const submit = useMutation({
     mutationFn: async () => {
       if (!itemId) throw new Error("Select an item");
@@ -54,7 +56,7 @@ function Page() {
         <Label>Quantity used</Label>
         <NumberField step="0.01" className="h-12 text-lg" value={qty} onValueChange={setQty} />
       </div>
-      <Button className="w-full h-14 text-base" onClick={() => submit.mutate()} disabled={submit.isPending}>
+      <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}
       </Button>
     </div>

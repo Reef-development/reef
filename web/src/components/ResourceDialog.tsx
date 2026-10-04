@@ -32,6 +32,16 @@ export function ResourceDialog({
   );
 }
 
+/**
+ * A labelled form field. The label wraps its control, so the two are tied together: a screen
+ * reader announces the label with the control, and clicking the label focuses it. Every Field
+ * holds one control.
+ */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="space-y-1.5"><label className="text-sm font-medium">{label}</label>{children}</div>;
+  return (
+    <label className="block space-y-1.5">
+      <span className="block text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
 }

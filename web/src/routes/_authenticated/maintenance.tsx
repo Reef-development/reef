@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useRemove, ZAR, NUM } from "@/lib/reef-db";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
@@ -52,11 +53,13 @@ function Page() {
     onError: (e: any) => toast.error(e.message ?? "Save failed"),
   });
 
+  const once = useOneAtATime();
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     if (!equipId) return toast.error("Select equipment");
-    saveLog.mutate({
+    // A double tap must not log the repair twice: the second submit is ignored while the first is in flight.
+    await once(() => saveLog.mutateAsync({
       equipment_id: equipId,
       date: f.get("date"),
       description: f.get("description"),
@@ -66,7 +69,7 @@ function Page() {
       next_due_date: f.get("next_due_date") || null,
       next_due_tons: Number(f.get("next_due_tons") || 0) || null,
       performed_by: f.get("performed_by") || null,
-    });
+    })).catch(() => {});
   };
 
   return (
