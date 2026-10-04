@@ -52,7 +52,8 @@ export async function apiListAll<T>(path: string, params: Record<string, string>
   }
 }
 
-export type Me = { id: string; role: Role | null };
+/** `plant` is the person's plant (T14). It is null for the owner, who works across every plant. */
+export type Me = { id: string; role: Role | null; plant?: string | null };
 
 const ME_TTL_MS = 30_000;
 let meCache: { token: string; at: number; value: Promise<Me | null> } | null = null;

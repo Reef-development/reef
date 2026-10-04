@@ -38,6 +38,14 @@ const DATA: Record<string, unknown[]> = {
   equipment: [{ id: "33333333-0000-0000-0000-000000000001", name: "Conveyor CV-201" }],
   stock_items: [{ id: "44444444-0000-0000-0000-000000000001", name: "Bearing 6205", qty_on_hand: 10, unit: "unit" }],
 };
+// Since T14 the stock pickers read each plant's levels through the API.
+vi.mock("@/hooks/useStock", () => ({
+  STOCK_KEY: ["stock"],
+  useStockOnHand: () => ({
+    data: [{ ...DATA.stock_items[0] as object, plant: "Kriel", reorder_point: 0, reorder_qty: 0, level: null }],
+    isLoading: false,
+  }),
+}));
 vi.mock("@/lib/reef-db", () => ({
   useList: (table: string) => ({ data: DATA[table] ?? [], isLoading: false }),
   NUM: (n: number) => String(n),

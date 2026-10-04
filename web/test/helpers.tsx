@@ -31,13 +31,13 @@ export function installBrowserShims() {
  * Renders one screen inside a real router and query client, the way the app does, so hooks
  * like useNavigate and useMutation behave as they do for a person using it.
  */
-export async function renderScreen(Screen: ComponentType) {
+export async function renderScreen(Screen: ComponentType, url = "/") {
   const root = createRootRoute();
   const page = createRoute({ getParentRoute: () => root, path: "/", component: Screen });
   const other = createRoute({ getParentRoute: () => root, path: "$", component: () => <p>Left the form</p> });
   const router = createRouter({
     routeTree: root.addChildren([page, other]),
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({ initialEntries: [url] }),
   });
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   const user = userEvent.setup();

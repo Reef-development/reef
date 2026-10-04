@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "@/lib/api";
-import { useList, NUM } from "@/lib/reef-db";
+import { NUM } from "@/lib/reef-db";
+import { STOCK_KEY, useStockOnHand } from "@/hooks/useStock";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,8 @@ import { toast } from "sonner";
 export const Route = createFileRoute("/worker/log-usage")({ component: Page });
 
 function Page() {
-  const stock = useList<any>("stock_items", "name", true);
+  // Only the items at this person's plant: the API returns no others.
+  const stock = useStockOnHand();
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState<number>(1);
   const navigate = useNavigate();
@@ -30,7 +32,7 @@ function Page() {
       await api("/api/v1/stock-usage", { method: "POST", body: JSON.stringify({ stock_item_id: itemId, qty }) });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["stock_items"] });
+      qc.invalidateQueries({ queryKey: STOCK_KEY });
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       toast.success("Usage logged");
       navigate({ to: "/worker" });

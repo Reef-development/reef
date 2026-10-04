@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useRemove, ZAR, NUM } from "@/lib/reef-db";
+import { STOCK_KEY, useStockOnHand } from "@/hooks/useStock";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -23,7 +24,7 @@ type PartRow = { stock_item_id: string; qty: number };
 function Page() {
   const list = useList<any>("maintenance_logs", "date");
   const equipment = useList<any>("equipment", "name", true);
-  const stock = useList<any>("stock_items", "name", true);
+  const stock = useStockOnHand();
   const qc = useQueryClient();
   const remove = useRemove("maintenance_logs");
 
@@ -45,7 +46,7 @@ function Page() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
-      qc.invalidateQueries({ queryKey: ["stock_items"] });
+      qc.invalidateQueries({ queryKey: STOCK_KEY });
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       toast.success("Repair logged. Stock updated and POs drafted where needed.");
       setOpen(false);
