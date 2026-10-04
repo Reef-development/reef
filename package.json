@@ -11,9 +11,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint api shared/src tests",
     "format": "prettier --write .",
-    "test": "node --env-file-if-exists=.env --test tests/quick.test.mjs tests/db.test.mjs tests/rls.test.mjs",
+    "test": "node --env-file-if-exists=.env --test tests/quick.test.mjs tests/db.test.mjs tests/rls.test.mjs tests/history-rls.test.mjs",
     "test:quick": "node --test tests/quick.test.mjs",
-    "test:db": "node --env-file-if-exists=.env --test tests/db.test.mjs tests/rls.test.mjs",
+    "test:db": "node --env-file-if-exists=.env --test tests/db.test.mjs tests/rls.test.mjs tests/history-rls.test.mjs",
     "test:rls": "node --env-file-if-exists=.env --test tests/rls.test.mjs",
     "api:check": "node scripts/check-api.mjs",
     "secrets:check": "node scripts/check-secrets.mjs"

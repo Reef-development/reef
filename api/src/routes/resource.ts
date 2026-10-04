@@ -17,7 +17,10 @@ type ResourceSpec = {
   noun: string;
   repo: (r: Repositories) => Repository<unknown, unknown, unknown>;
   input: ZodType;
-  /** Fields a client may change. The factory adds the required `version` itself. */
+  /**
+   * Fields a client may change. The factory adds the required `version` and the required
+   * `reason` itself, so every update carries both.
+   */
   patch: ZodObject;
   sortable: readonly string[];
   read: Permission;
@@ -27,8 +30,8 @@ type ResourceSpec = {
 
 /**
  * Registers list, get, create, update and delete for one table. Most of the platform's
- * resources are plain records, so this keeps them identical in behaviour instead of sixteen
- * hand-written copies that drift apart.
+ * resources are plain records, so this keeps them identical in behaviour instead of
+ * sixteen hand-written copies that drift apart.
  */
 export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: ResourceSpec) {
   const base = `/api/v1/${spec.name}`;
@@ -101,17 +104,19 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       access: spec.write,
       summary: spec.summaries.update,
       refuses:
-        "Invalid or unrecognised fields, a missing version, or a version older than the stored one. " +
+        "Invalid or unrecognised fields, a missing version, a missing reason, or a version older than the stored one. " +
         "The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw.",
     },
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
-      // The schema is built per resource, so TypeScript only knows it adds `version: number`.
-      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<
-        string,
-        unknown
-      >;
-      const result = await spec.repo(c.var.repos).update(id, changes, version);
+      // The schema is built per resource. TypeScript only knows it adds `version` and `reason`;
+      // the rest of the fields are the patch's own. Destructure both out so neither ends up in
+      // the patch sent to the repository.
+      const { version, reason, ...changes } = (await parseBody(c, Update)) as {
+        version: number;
+        reason: string;
+      } & Record<string, unknown>;
+      const result = await spec.repo(c.var.repos).update(id, changes, version, reason);
       if (result.status === "missing") throw notFound();
       if (result.status === "stale") {
         throw new ApiError(

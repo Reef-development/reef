@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  HistoryQuery,
   ListQuery,
   Mine,
   MineInput,
@@ -12,6 +13,8 @@ import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type {
+  HistoryEntry,
+  HistoryRepository,
   Page,
   Repository,
   ScopedRepository,
@@ -39,11 +42,43 @@ export const USERS: Record<string, { id: string; roles: string[]; plant: string 
   },
 };
 
-/**
- * The plant for a create, mirroring the real repository. A non-owner without a plant on
- * their profile cannot create — there is no plant to attribute the row to. Throws an
- * ApiError so the app's error handler maps it to 403 rather than 500.
- */
+export class MemoryHistory implements HistoryRepository {
+  rows: HistoryEntry[] = [];
+
+  async list(q: HistoryQuery): Promise<Page<HistoryEntry>> {
+    const matching = this.rows
+      .filter((r) => (!q.table || r.table_name === q.table) && (!q.row_id || r.row_id === q.row_id))
+      .reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: matching.slice(from, from + q.pageSize), total: matching.length };
+  }
+
+  append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
+    const full: HistoryEntry = {
+      id: randomUUID(),
+      changed_at: new Date().toISOString(),
+      ...entry,
+    };
+    this.rows.push(full);
+    return full;
+  }
+}
+
+function diff(
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+): { old: Record<string, unknown>; next: Record<string, unknown> } {
+  const old: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      old[key] = before[key];
+      next[key] = after[key];
+    }
+  }
+  return { old, next };
+}
+
 function plantForCreate(input: { plant: string }, user: UserContext): string {
   if (user.role === "owner") return input.plant;
   if (!user.plant) {
@@ -57,6 +92,11 @@ function plantForCreate(input: { plant: string }, user: UserContext): string {
 
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
+
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly currentUserId: () => string | null,
+  ) {}
 
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
@@ -87,14 +127,38 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-  /** Like the database: the version check and the write happen together, with no await between. */
-  async update(id: string, patch: MinePatch, expectedVersion: number): Promise<UpdateResult<Mine>> {
+  async update(
+    id: string,
+    patch: MinePatch,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<UpdateResult<Mine>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
-    return { status: "updated", row: { ...row } };
+    const after = { ...row };
+    const { old, next } = diff(
+      before as unknown as Record<string, unknown>,
+      after as unknown as Record<string, unknown>,
+    );
+    const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
+    this.history.append({
+      table_name: "mines",
+      row_id: id,
+      changed_by: actor,
+      reason,
+      plant: null,
+      old_values: old,
+      new_values: next,
+      version: after.version,
+    });
+    return { status: "updated", row: after };
   }
   async remove(id: string) {
     const before = this.rows.length;
@@ -103,7 +167,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
-/** The fake stock repository. Mirrors the real one's plant filter and version check. */
 export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
   rows: Stock[] = [];
 
@@ -117,7 +180,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     const from = (q.page - 1) * q.pageSize;
     return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
   }
-
   async get(id: string, user: UserContext): Promise<Stock | null> {
     await tick();
     const row = this.rows.find((r) => r.id === id);
@@ -125,7 +187,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     if (user.role !== "owner" && row.plant !== user.plant) return null;
     return { ...row };
   }
-
   async create(input: StockInput, user: UserContext): Promise<Stock> {
     const now = new Date().toISOString();
     const plant = plantForCreate(input, user);
@@ -144,7 +205,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     this.rows.push(row);
     return row;
   }
-
   async update(
     id: string,
     patch: StockPatch,
@@ -159,7 +219,6 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     return { status: "updated", row: { ...row } };
   }
-
   async remove(id: string, user: UserContext): Promise<boolean> {
     const row = this.rows.find((r) => r.id === id);
     if (!row) return false;
@@ -171,8 +230,11 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
 }
 
 export function testApp(overrides: Partial<Repositories> = {}) {
-  const mines = new MemoryMines();
+  const history = new MemoryHistory();
   const stock = new MemoryStock();
+  let currentUserId: string | null = null;
+  const mines = new MemoryMines(history, () => currentUserId);
+
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -181,15 +243,19 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
-    repositories: (token) => ({
-      roles: {
-        forUser: async () => USERS[token]?.roles ?? [],
-        plantFor: async () => USERS[token]?.plant ?? null,
-      },
-      mines,
-      stock,
-      ...overrides,
-    }),
+    repositories: (token) => {
+      currentUserId = USERS[token]?.id ?? null;
+      return {
+        roles: {
+          forUser: async () => USERS[token]?.roles ?? [],
+          plantFor: async () => USERS[token]?.plant ?? null,
+        },
+        history,
+        mines,
+        stock,
+        ...overrides,
+      };
+    },
     log: (_msg, err) => logged.push(err),
   });
 
@@ -208,5 +274,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, stock, logged, call };
+  return { app, registry, mines, stock, history, logged, call };
 }
