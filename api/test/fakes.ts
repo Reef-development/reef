@@ -36,25 +36,47 @@ import type {
   RetentionRepository,
   ScopedRepository,
   ServiceSweepRepository,
+  SessionRepository,
   UpdateResult,
   UserContext,
+  UserSession,
 } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Token → user, their roles, and their plant (null for the owner, who sees every plant). */
-export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+/** Token → user, their session, roles and plant (null for the owner, who sees every plant). */
+export const USERS: Record<
+  string,
+  { id: string; sessionId: string; roles: string[]; plant: string | null }
+> = {
+  "owner-token": {
+    id: "00000000-0000-4000-8000-000000000001",
+    sessionId: "10000000-0000-4000-8000-000000000001",
+    roles: ["owner"],
+    plant: null,
+  },
+  "manager-token": {
+    id: "00000000-0000-4000-8000-000000000002",
+    sessionId: "10000000-0000-4000-8000-000000000002",
+    roles: ["manager"],
+    plant: "A",
+  },
+  "worker-token": {
+    id: "00000000-0000-4000-8000-000000000003",
+    sessionId: "10000000-0000-4000-8000-000000000003",
+    roles: ["worker"],
+    plant: "A",
+  },
   "no-plant-token": {
     id: "00000000-0000-4000-8000-000000000005",
+    sessionId: "10000000-0000-4000-8000-000000000005",
     roles: ["manager"],
     plant: null,
   },
   "legacy-token": {
     id: "00000000-0000-4000-8000-000000000004",
+    sessionId: "10000000-0000-4000-8000-000000000004",
     roles: ["stock_controller"],
     plant: "A",
   },
@@ -121,15 +143,23 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     const key = (q.sort ?? "name") as keyof Mine;
     const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
     if (q.order === "desc") sorted.reverse();
+
     const from = (q.page - 1) * q.pageSize;
-    return { rows: sorted.slice(from, from + q.pageSize), total: this.rows.length };
+
+    return {
+      rows: sorted.slice(from, from + q.pageSize),
+      total: this.rows.length,
+    };
   }
+
   async get(id: string) {
     await tick();
     return this.rows.find((r) => r.id === id) ?? null;
   }
+
   async create(input: MineInput) {
     const now = new Date().toISOString();
+
     const row: Mine = {
       id: randomUUID(),
       client_id: null,
@@ -142,6 +172,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       updated_at: now,
       ...input,
     };
+
     this.rows.push(row);
     return row;
   }
@@ -156,6 +187,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
     }
     const row = this.rows.find((r) => r.id === id);
+
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
     const before = { ...row };
@@ -182,6 +214,78 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
     return this.rows.length < before;
+  }
+}
+
+class MemorySessions implements SessionRepository {
+  constructor(
+    private readonly userId: string,
+    private readonly rows: UserSession[],
+  ) {}
+
+  async touch(sessionId: string, device: string | null, address: string | null): Promise<boolean> {
+    const existing = this.rows.find((row) => row.session_id === sessionId);
+
+    if (existing) {
+      if (existing.revoked_at) {
+        return false;
+      }
+
+      existing.device = device;
+      existing.address = address;
+      existing.last_used_at = new Date().toISOString();
+
+      return true;
+    }
+
+    const now = new Date().toISOString();
+
+    this.rows.push({
+      id: randomUUID(),
+      user_id: this.userId,
+      session_id: sessionId,
+      device,
+      address,
+      last_used_at: now,
+      revoked_at: null,
+      created_at: now,
+    });
+
+    return true;
+  }
+
+  async forUser(userId: string): Promise<UserSession[]> {
+    return this.rows
+      .filter((row) => row.user_id === userId)
+      .sort((a, b) => b.last_used_at.localeCompare(a.last_used_at));
+  }
+
+  async revoke(sessionId: string): Promise<boolean> {
+    const session = this.rows.find(
+      (row) => row.session_id === sessionId && row.revoked_at === null,
+    );
+
+    if (!session) {
+      return false;
+    }
+
+    session.revoked_at = new Date().toISOString();
+
+    return true;
+  }
+
+  async revokeAll(userId: string): Promise<number> {
+    let count = 0;
+    const now = new Date().toISOString();
+
+    for (const session of this.rows) {
+      if (session.user_id === userId && session.revoked_at === null) {
+        session.revoked_at = now;
+        count += 1;
+      }
+    }
+
+    return count;
   }
 }
 
@@ -594,21 +698,33 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
 
+  const sessionRows: UserSession[] = [];
   const logged: unknown[] = [];
+
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
+
     verifyToken: async (token) => {
       const user = USERS[token];
-      if (!user) throw new Error("bad token");
-      return { userId: user.id };
+
+      if (!user) {
+        throw new Error("bad token");
+      }
+
+      return {
+        userId: user.id,
+        sessionId: user.sessionId,
+      };
     },
     repositories: (token) => {
-      currentUserId = USERS[token]?.id ?? null;
+      const user = USERS[token];
+      currentUserId = user?.id ?? null;
       return {
         roles: {
-          forUser: async () => USERS[token]?.roles ?? [],
-          plantFor: async () => USERS[token]?.plant ?? null,
+          forUser: async () => user?.roles ?? [],
+          plantFor: async () => user?.plant ?? null,
         },
+        sessions: new MemorySessions(user?.id ?? "", sessionRows),
         history,
         mines,
         stock,
@@ -628,8 +744,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     app.request(path, {
       method,
       headers: {
-        ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
-        ...(opts.body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(opts.token
+          ? {
+              Authorization: `Bearer ${opts.token}`,
+            }
+          : {}),
+        ...(opts.body !== undefined
+          ? {
+              "Content-Type": "application/json",
+            }
+          : {}),
       },
       body:
         opts.body === undefined
@@ -647,6 +771,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     stockLevels,
     purchaseOrders,
     history,
+    sessionRows,
     analytics,
     retention,
     notifications,

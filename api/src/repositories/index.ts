@@ -13,19 +13,21 @@ import type {
   StockPatch,
 } from "@reef/shared";
 import type {
-  AnalyticsRepository,
   HistoryRepository,
-  JobRepository,
-  NotificationRepository,
   Repository,
-  RetentionRepository,
   RoleRepository,
   ScopedRepository,
+  SessionRepository,
+  AnalyticsRepository,
+  JobRepository,
+  NotificationRepository,
+  RetentionRepository,
 } from "./types.js";
 
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {
   roles: RoleRepository;
+  sessions: SessionRepository;
   history: HistoryRepository;
   mines: Repository<Mine, MineInput, MinePatch>;
   stock: ScopedRepository<Stock, StockInput, StockPatch>;

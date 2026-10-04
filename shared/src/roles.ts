@@ -21,6 +21,7 @@ export function highestRole(held: readonly string[]): Role | null {
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+  "sessions:manage": ["owner"],
   "stock:read": ["owner", "manager", "worker"],
   "stock:write": ["owner", "manager"],
   "po:read": ["owner", "manager"],
@@ -45,7 +46,6 @@ export const PERMISSIONS = {
   // question about whether the system is working rather than about one site.
   "jobs:read": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
-
 export type Permission = keyof typeof PERMISSIONS;
 
 export function can(role: Role | null, permission: Permission): boolean {

@@ -17,8 +17,10 @@ import type {
   Repository,
   RetentionRepository,
   RoleRepository,
+  SessionRepository,
   ServiceSweepRepository,
   UpdateResult,
+  UserSession,
 } from "./types.js";
 
 type PgError = { code?: string; message: string };
@@ -130,6 +132,54 @@ export class SupabaseRoleRepository implements RoleRepository {
       .maybeSingle();
     if (error) throw translate(error);
     return (data as { plant: string | null } | null)?.plant ?? null;
+  }
+}
+
+export class SupabaseSessionRepository implements SessionRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async touch(sessionId: string, device: string | null, address: string | null): Promise<boolean> {
+    const { data, error } = await this.db.rpc("touch_user_session", {
+      _session_id: sessionId,
+      _device: device,
+      _address: address,
+    });
+
+    if (error) throw translate(error);
+
+    return data === true;
+  }
+
+  async forUser(userId: string): Promise<UserSession[]> {
+    const { data, error } = await this.db
+      .from("user_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("last_used_at", { ascending: false });
+
+    if (error) throw translate(error);
+
+    return (data ?? []) as UserSession[];
+  }
+
+  async revoke(sessionId: string): Promise<boolean> {
+    const { data, error } = await this.db.rpc("revoke_user_session", {
+      _session_id: sessionId,
+    });
+
+    if (error) throw translate(error);
+
+    return data === true;
+  }
+
+  async revokeAll(userId: string): Promise<number> {
+    const { data, error } = await this.db.rpc("revoke_all_user_sessions", {
+      _target_user_id: userId,
+    });
+
+    if (error) throw translate(error);
+
+    return typeof data === "number" ? data : 0;
   }
 }
 
