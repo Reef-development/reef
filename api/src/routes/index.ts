@@ -1,9 +1,13 @@
 import type { Hono } from "hono";
-import { MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
+import { HistoryQuery, MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
 import type { AppEnv } from "../app.js";
+import { parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
+import { adminRoutes } from "./admin.js";
+import { analyticsRoutes } from "./analytics.js";
 import { defineRoute } from "./define.js";
+import { notificationRoutes } from "./notifications.js";
 import { resourceRoutes } from "./resource.js";
 
 export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
@@ -33,6 +37,31 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     (c) => ok(c, c.var.user),
   );
+
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "GET",
+      path: "/api/v1/history",
+      access: "history:read",
+      summary:
+        "Lists changes to records, newest first, each with who made it, why, and the old and new values. " +
+        "Filter by table and record to show one record's history.",
+      refuses:
+        "Workers, because history can show pay and personal details. A manager is not refused but sees " +
+        "only changes at their own plant. Also refuses a malformed record id or a page size above 200.",
+    },
+    async (c) => {
+      const q = parseWith(HistoryQuery, c.req.query());
+      const { rows, total } = await c.var.repos.history.list(q);
+      return ok(c, rows, 200, { page: q.page, pageSize: q.pageSize, total });
+    },
+  );
+
+  analyticsRoutes(app, registry);
+  adminRoutes(app, registry);
+  notificationRoutes(app, registry);
 
   resourceRoutes(app, registry, {
     name: "mines",
