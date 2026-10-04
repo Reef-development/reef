@@ -35,6 +35,7 @@ import type {
   StockUsageRepository,
   UserRepository,
 } from "./types.js";
+import type { PurchaseActionsRepository } from "./purchase-actions.js";
 
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {
@@ -56,5 +57,6 @@ export type Repositories = {
   retention: RetentionRepository;
   notifications: NotificationRepository;
   jobs: JobRepository;
+  purchaseActions: PurchaseActionsRepository;
   settings: SettingsRepository;
 };

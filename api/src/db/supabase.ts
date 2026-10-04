@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+import { SupabasePurchaseActions } from "../repositories/purchase-actions.js";
 import { SupabasePurchaseOrderRepository } from "../repositories/purchase-orders.js";
 import { SupabaseStockLevelRepository } from "../repositories/stock-levels.js";
 import { SupabaseStockRepository } from "../repositories/stock.js";
@@ -53,6 +54,7 @@ export function supabaseRepositories(config: Config) {
       retention: new SupabaseRetentionRepository(db),
       notifications: new SupabaseNotificationRepository(db),
       jobs: new SupabaseJobRepository(db),
+      purchaseActions: new SupabasePurchaseActions(db),
       settings: new SupabaseSettings(db),
     };
   };
