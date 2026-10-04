@@ -28,15 +28,13 @@ beforeAll(async () => {
   bearingId = item.rows[0].id;
 }, 60_000);
 
-/** The quantity on hand at the item's own plant, from stock_levels, which T14 made the record. */
+/**
+ * The quantity on hand at the item's own plant, from stock_levels, which T14 made the record.
+ * stock_level_of makes the level from the item's figures if no rule has needed one yet.
+ */
 const qty = async (id: string) =>
   Number(
-    (
-      await db.query<{ q: string }>(
-        "SELECT l.qty_on_hand q FROM stock_levels l JOIN stock_items s ON s.id = l.stock_item_id AND s.plant = l.plant WHERE s.id = $1",
-        [id],
-      )
-    ).rows[0].q,
+    (await db.query<{ q: string }>("SELECT (stock_level_of($1)).qty_on_hand q", [id])).rows[0].q,
   );
 
 describe("fuel slip totals", () => {
@@ -224,15 +222,30 @@ describe("T14: the stock rules work on each plant's own level", () => {
       )
     ).rows[0].id;
 
-  it("gives a new item a level at its plant", async () => {
+  it("makes a level at the item's plant the first time a rule needs one", async () => {
     const id = await newItem("Grease", "Kriel", 12);
+    await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 2)", [id]));
     const { rows } = await db.query<{ plant: string; qty_on_hand: string }>(
       "SELECT plant, qty_on_hand FROM stock_levels WHERE stock_item_id = $1",
       [id],
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].plant).toBe("Kriel");
-    expect(Number(rows[0].qty_on_hand)).toBe(12);
+    expect(Number(rows[0].qty_on_hand)).toBe(10);
+  });
+
+  it("lets the API add an item and then its level, as T14's endpoints do", async () => {
+    const id = await newItem("Gasket", "Kriel", 0);
+    await db.query(
+      "INSERT INTO stock_levels (stock_item_id, plant, qty_on_hand) VALUES ($1, 'Kriel', 7)",
+      [id],
+    );
+    expect(await qty(id)).toBe(7);
+    const item = await db.query<{ q: string }>(
+      "SELECT qty_on_hand q FROM stock_items WHERE id = $1",
+      [id],
+    );
+    expect(Number(item.rows[0].q)).toBe(7);
   });
 
   it("refuses usage of another plant's item as not found, so it does not confirm it exists", async () => {
@@ -258,6 +271,7 @@ describe("T14: the stock rules work on each plant's own level", () => {
   it("uses the plant's reorder point, not the old one on the item", async () => {
     const id = await newItem("Hose", "Kriel", 10, 2, 4);
     // A manager raises the reorder point on the level, as the T14 screens do.
+    await db.query("SELECT stock_level_of($1)", [id]);
     await db.query("UPDATE stock_levels SET reorder_point = 9 WHERE stock_item_id = $1", [id]);
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
     const n = await db.query<{ n: string }>(

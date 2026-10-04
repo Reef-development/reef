@@ -211,7 +211,9 @@ revoke all on function public.record_stock_usage(uuid, numeric) from public, ano
 grant execute on function public.record_stock_usage(uuid, numeric) to authenticated;
 
 -- 6. Keep the two counts equal until the prototype stops using stock_items' columns. Each side
---    only writes when the value differs, so a change bounces once and stops.
+--    only writes when the value differs, so a change bounces once and stops. A new item does
+--    not get a level from this: the API adds the item and then its level, and a level made
+--    here first would make that second step fail. The rules above make one when they need it.
 
 create or replace function public.sync_level_to_item()
 returns trigger
@@ -247,7 +249,8 @@ begin
      and l.plant = new.plant
      and (l.qty_on_hand, l.reorder_point, l.reorder_qty)
          is distinct from (new.qty_on_hand, new.reorder_point, new.reorder_qty);
-  if not found and tg_op = 'INSERT' then
+  -- An item the prototype made has no level yet; its first change makes one.
+  if not found then
     perform public.stock_level_of(new.id);
   end if;
   return new;
@@ -264,7 +267,7 @@ create trigger trg_stock_levels_sync_item
 
 drop trigger if exists trg_stock_items_sync_level on public.stock_items;
 create trigger trg_stock_items_sync_level
-  after insert or update of qty_on_hand, reorder_point, reorder_qty on public.stock_items
+  after update of qty_on_hand, reorder_point, reorder_qty on public.stock_items
   for each row execute function public.sync_item_to_level();
 
 -- Items that exist already get their level now, so nothing waits for its first change.
