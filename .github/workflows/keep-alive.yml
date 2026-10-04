@@ -1,0 +1,40 @@
+name: Keep alive
+
+on:
+  schedule:
+    # Every 10 minutes, 24 hours a day. The free tier suspends an idle Render service
+    # after 15 minutes and pauses an idle Supabase project after 7 days. A worker may
+    # capture at any hour, so the probe runs continuously rather than only during
+    # nominal working hours.
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping the API and the database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ping the API health endpoint
+        env:
+          API_PUBLIC_URL: ${{ vars.API_PUBLIC_URL }}
+        run: |
+          if [ -z "$API_PUBLIC_URL" ]; then
+            echo "API_PUBLIC_URL is not set. Skipping."
+            exit 0
+          fi
+          curl -fsS --max-time 90 "$API_PUBLIC_URL/health" || echo "API did not answer within 90 seconds (may be cold-starting)"
+
+      - name: Ping the database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is not set. Skipping."
+            exit 0
+          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+          psql "$DATABASE_URL" -c "select 1" > /dev/null
