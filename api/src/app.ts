@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { secureHeaders } from "hono/secure-headers";
-import type { Role } from "@reef/shared";
+import type { RetentionYears, Role } from "@reef/shared";
 import type { TokenVerifier } from "./auth/verify.js";
 import { fail } from "./http/envelope.js";
 import { ApiError } from "./http/errors.js";
@@ -14,14 +14,15 @@ export type Deps = {
   verifyToken: TokenVerifier;
   repositories: (token: string) => Repositories;
   corsOrigins: string[];
+  /** How long employee information is kept. Falls back to the values in the shared policy. */
+  retention?: RetentionYears;
   log?: (msg: string, err: unknown) => void;
 };
 
 export type AppEnv = {
   Variables: {
     deps: Deps;
-    /** The caller. `plant` is null for the owner, who sees every plant. */
-    user: { id: string; role: Role | null; plant: string | null };
+    user: { id: string; role: Role | null };
     repos: Repositories;
   };
 };
@@ -57,6 +58,7 @@ export function createApp(deps: Deps) {
   app.notFound((c) => fail(c, new ApiError("NOT_FOUND", "No such endpoint")));
   app.onError((err, c) => {
     if (err instanceof ApiError && err.code !== "INTERNAL") return fail(c, err);
+    // Unexpected failures are logged in full but never described to the caller.
     (deps.log ?? console.error)(`${c.req.method} ${c.req.path} failed`, err);
     return fail(
       c,
