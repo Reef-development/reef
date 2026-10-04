@@ -27,6 +27,10 @@ import type {
   Row,
   ScopedRepository,
   StockUsageRepository,
+  AnalyticsRepository,
+  JobRepository,
+  NotificationRepository,
+  RetentionRepository,
 } from "./types.js";
 
 /** Everything a request can reach, already scoped to the caller. */
@@ -43,4 +47,8 @@ export type Repositories = {
   stock: ScopedRepository<Stock, StockInput, StockPatch>;
   stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;
   purchaseOrders: ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>;
+  analytics: AnalyticsRepository;
+  retention: RetentionRepository;
+  notifications: NotificationRepository;
+  jobs: JobRepository;
 };

@@ -12,6 +12,8 @@ beforeAll(async () => {
   worker = await db.user("worker");
   manager = await db.user("manager");
   // T14: stock belongs to a plant, and people use stock at their own plant.
+  // Plants are a list since #57; a stock item or a person can only belong to one on it.
+  await db.query("INSERT INTO plants (name) VALUES ('Kriel'), ('Ogies') ON CONFLICT DO NOTHING");
   // Only the service role may set someone's plant (T14), so do it as an admin would.
   await db.transaction(async (tx) => {
     await tx.query("SELECT set_config('request.jwt.claim.role', 'service_role', true)");
