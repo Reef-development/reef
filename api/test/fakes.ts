@@ -1,37 +1,83 @@
 import { randomUUID } from "node:crypto";
 import type {
+<<<<<<< HEAD
   Client,
   ClientInput,
   ClientPatch,
+=======
+  HistoryQuery,
+>>>>>>> origin/develop
   ListQuery,
   Mine,
   MineInput,
   MinePatch,
+<<<<<<< HEAD
   Supplier,
   SupplierInput,
   SupplierPatch,
+=======
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
+  Stock,
+  StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
+  StockPatch,
+>>>>>>> origin/develop
 } from "@reef/shared";
 import { createApp } from "../src/app.js";
+import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
-import type { HistoryEntry, Page, Repository, UpdateResult } from "../src/repositories/types.js";
+import type {
+  HistoryEntry,
+  HistoryRepository,
+  Page,
+  Repository,
+  ScopedRepository,
+  UpdateResult,
+  UserContext,
+} from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Token → user and the roles stored for them, standing in for Supabase Auth and `user_roles`. */
-export const USERS: Record<string, { id: string; roles: string[] }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"] },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"] },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"] },
-  "legacy-token": { id: "00000000-0000-4000-8000-000000000004", roles: ["stock_controller"] },
+/** Token → user, their roles, and their plant (null for the owner, who sees every plant). */
+export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
+  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
+  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
+  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "no-plant-token": {
+    id: "00000000-0000-4000-8000-000000000005",
+    roles: ["manager"],
+    plant: null,
+  },
+  "legacy-token": {
+    id: "00000000-0000-4000-8000-000000000004",
+    roles: ["stock_controller"],
+    plant: "A",
+  },
 };
 
+<<<<<<< HEAD
 /**
  * The in-memory stand-in for the history table. Rows are appended, never updated or
  * deleted. Tests read it to assert a change was recorded.
  */
 export class MemoryHistory {
+=======
+export class MemoryHistory implements HistoryRepository {
+>>>>>>> origin/develop
   rows: HistoryEntry[] = [];
+
+  async list(q: HistoryQuery): Promise<Page<HistoryEntry>> {
+    const matching = this.rows
+      .filter((r) => (!q.table || r.table_name === q.table) && (!q.row_id || r.row_id === q.row_id))
+      .reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: matching.slice(from, from + q.pageSize), total: matching.length };
+  }
 
   append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
     const full: HistoryEntry = {
@@ -44,10 +90,6 @@ export class MemoryHistory {
   }
 }
 
-/**
- * The columns that differ between `before` and `after`. Mirrors the diff in the Supabase
- * repository, so a test can predict exactly what the history row will contain.
- */
 function diff(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -63,11 +105,28 @@ function diff(
   return { old, next };
 }
 
+<<<<<<< HEAD
 /** The fake mines repository. Writes to MemoryHistory on update, mirroring the real one. */
+=======
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
+}
+
+>>>>>>> origin/develop
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   rows: Mine[] = [];
 
-  constructor(private readonly history: MemoryHistory) {}
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly currentUserId: () => string | null,
+  ) {}
 
   async list(q: ListQuery): Promise<Page<Mine>> {
     await tick();
@@ -103,32 +162,32 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     patch: MinePatch,
     expectedVersion: number,
     reason: string,
-    changedBy: string,
   ): Promise<UpdateResult<Mine>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
-
     const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     const after = { ...row };
-
     const { old, next } = diff(
       before as unknown as Record<string, unknown>,
       after as unknown as Record<string, unknown>,
     );
+    const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
     this.history.append({
       table_name: "mines",
       row_id: id,
-      changed_by: changedBy,
+      changed_by: actor,
       reason,
       plant: null,
       old_values: old,
       new_values: next,
       version: after.version,
     });
-
     return { status: "updated", row: after };
   }
   async remove(id: string) {
@@ -138,6 +197,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
+<<<<<<< HEAD
 /** The fake supplier repository. Suppliers are not plant-scoped. Writes history on update. */
 export class MemorySupplier implements Repository<Supplier, SupplierInput, SupplierPatch> {
   rows: Supplier[] = [];
@@ -164,16 +224,52 @@ export class MemorySupplier implements Repository<Supplier, SupplierInput, Suppl
       email: null,
       phone: null,
       notes: null,
+=======
+export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
+  rows: Stock[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<Stock>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "name") as keyof Stock;
+    const sorted = [...visible].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<Stock | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockInput, user: UserContext): Promise<Stock> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: Stock = {
+      id: randomUUID(),
+      sku: null,
+      unit: null,
+      unit_cost: 0,
+      supplier_id: null,
+>>>>>>> origin/develop
       version: 1,
       created_at: now,
       updated_at: now,
       ...input,
+<<<<<<< HEAD
+=======
+      plant,
+>>>>>>> origin/develop
     };
     this.rows.push(row);
     return row;
   }
   async update(
     id: string,
+<<<<<<< HEAD
     patch: SupplierPatch,
     expectedVersion: number,
     reason: string,
@@ -206,12 +302,31 @@ export class MemorySupplier implements Repository<Supplier, SupplierInput, Suppl
     return { status: "updated", row: after };
   }
   async remove(id: string) {
+=======
+    patch: StockPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<Stock>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+>>>>>>> origin/develop
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
     return this.rows.length < before;
   }
 }
 
+<<<<<<< HEAD
 /** The fake client repository. Clients are not plant-scoped. Writes history on update. */
 export class MemoryClient implements Repository<Client, ClientInput, ClientPatch> {
   rows: Client[] = [];
@@ -242,16 +357,60 @@ export class MemoryClient implements Repository<Client, ClientInput, ClientPatch
       contract_revenue_monthly: null,
       active: true,
       notes: null,
+=======
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
+  rows: StockLevel[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof StockLevel;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<StockLevel | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: StockLevel = {
+      id: randomUUID(),
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+>>>>>>> origin/develop
       version: 1,
       created_at: now,
       updated_at: now,
       ...input,
+<<<<<<< HEAD
+=======
+      plant,
+>>>>>>> origin/develop
     };
     this.rows.push(row);
     return row;
   }
   async update(
     id: string,
+<<<<<<< HEAD
     patch: ClientPatch,
     expectedVersion: number,
     reason: string,
@@ -284,6 +443,98 @@ export class MemoryClient implements Repository<Client, ClientInput, ClientPatch
     return { status: "updated", row: after };
   }
   async remove(id: string) {
+=======
+    patch: StockLevelPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<StockLevel>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryPurchaseOrder implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
+  rows: PurchaseOrder[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof PurchaseOrder;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<PurchaseOrder | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      supplier_id: null,
+      status: "draft",
+      total_cost: 0,
+      notes: null,
+      approved_at: null,
+      ordered_at: null,
+      received_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: PurchaseOrderPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<PurchaseOrder>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+>>>>>>> origin/develop
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
     return this.rows.length < before;
@@ -292,9 +543,19 @@ export class MemoryClient implements Repository<Client, ClientInput, ClientPatch
 
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
+<<<<<<< HEAD
   const mines = new MemoryMines(history);
   const suppliers = new MemorySupplier(history);
   const clients = new MemoryClient(history);
+=======
+  const stock = new MemoryStock();
+  const stockLevels = new MemoryStockLevel();
+  const purchaseOrders = new MemoryPurchaseOrder();
+
+  let currentUserId: string | null = null;
+  const mines = new MemoryMines(history, () => currentUserId);
+
+>>>>>>> origin/develop
   const logged: unknown[] = [];
   const { app, registry } = createApp({
     corsOrigins: ["http://localhost:8080"],
@@ -303,6 +564,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
+<<<<<<< HEAD
     repositories: (token) => ({
       roles: { forUser: async () => USERS[token]?.roles ?? [] },
       mines,
@@ -310,6 +572,23 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       clients,
       ...overrides,
     }),
+=======
+    repositories: (token) => {
+      currentUserId = USERS[token]?.id ?? null;
+      return {
+        roles: {
+          forUser: async () => USERS[token]?.roles ?? [],
+          plantFor: async () => USERS[token]?.plant ?? null,
+        },
+        history,
+        mines,
+        stock,
+        stockLevels,
+        purchaseOrders,
+        ...overrides,
+      };
+    },
+>>>>>>> origin/develop
     log: (_msg, err) => logged.push(err),
   });
 
@@ -328,5 +607,9 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
+<<<<<<< HEAD
   return { app, registry, mines, suppliers, clients, history, logged, call };
+=======
+  return { app, registry, mines, stock, stockLevels, purchaseOrders, history, logged, call };
+>>>>>>> origin/develop
 }

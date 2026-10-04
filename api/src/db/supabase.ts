@@ -1,9 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+<<<<<<< HEAD
 import { SupabaseClientRepository } from "../repositories/clients.js";
 import { SupabaseSupplierRepository } from "../repositories/suppliers.js";
 import { SupabaseRoleRepository, SupabaseTableRepository } from "../repositories/supabase.js";
+=======
+import { SupabasePurchaseOrderRepository } from "../repositories/purchase-orders.js";
+import { SupabaseStockLevelRepository } from "../repositories/stock-levels.js";
+import { SupabaseStockRepository } from "../repositories/stock.js";
+import {
+  SupabaseHistoryRepository,
+  SupabaseRoleRepository,
+  SupabaseTableRepository,
+} from "../repositories/supabase.js";
+>>>>>>> origin/develop
 
 /**
  * Builds the repositories for one request, carrying the caller's own token. The database
@@ -18,9 +29,16 @@ export function supabaseRepositories(config: Config) {
     });
     return {
       roles: new SupabaseRoleRepository(db),
+      history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
+<<<<<<< HEAD
       suppliers: new SupabaseSupplierRepository(db),
       clients: new SupabaseClientRepository(db),
+=======
+      stock: new SupabaseStockRepository(db),
+      stockLevels: new SupabaseStockLevelRepository(db),
+      purchaseOrders: new SupabasePurchaseOrderRepository(db),
+>>>>>>> origin/develop
     };
   };
 }
