@@ -150,11 +150,13 @@ export interface ScopedRepository<Row, Input, Patch> {
   list(query: ListQuery, user: UserContext): Promise<Page<Row>>;
   get(id: string, user: UserContext): Promise<Row | null>;
   create(input: Input, user: UserContext): Promise<Row>;
+  /** As Repository.update, after checking the caller can see the record. */
   update(
     id: string,
     patch: Patch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<Row>>;
   remove(id: string, user: UserContext): Promise<boolean>;
 }
@@ -247,4 +249,19 @@ export interface JobRepository {
 export interface NotificationRepository {
   list(userId: string, opts: { unread?: boolean; limit: number }): Promise<Notification[]>;
   markRead(userId: string, id: string): Promise<boolean>;
+}
+
+export type Setting = {
+  key: string;
+  value: unknown;
+  description: string | null;
+  updated_at: string;
+};
+
+export interface SettingsRepository {
+  list(): Promise<Setting[]>;
+  /** How many days old an entry may be when it is captured. */
+  captureMaxAgeDays(): Promise<number>;
+  /** Changes a setting. Null if there is no such setting. */
+  set(key: string, value: unknown, by: string): Promise<Setting | null>;
 }

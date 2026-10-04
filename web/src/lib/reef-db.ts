@@ -25,6 +25,7 @@ const API_PATHS: Partial<Record<TableName, string>> = {
 /**
  * Fields the server owns. They are never sent back on an update. `version` is sent: an update
  * must carry the version the screen read, and the server refuses it if the record moved on.
+ * So is the reason for the change: the server refuses an update without one.
  */
 const SERVER_FIELDS = ["id", "created_at", "updated_at"];
 
@@ -50,14 +51,19 @@ export function useUpsert(table: TableName, opts: { showsConflicts?: boolean } =
   return useMutation({
     mutationFn: async (row: any) => {
       const path = API_PATHS[table];
+      // Why an existing record is being changed (T7). It travels apart from the record's own
+      // fields because some tables already have a `reason` column that means something else
+      // (a downtime cause, a transfer's reason).
+      const { changeReason, ...fields } = row;
       if (path) {
-        const body = Object.fromEntries(Object.entries(row).filter(([k]) => !SERVER_FIELDS.includes(k)));
+        const body = Object.fromEntries(Object.entries(fields).filter(([k]) => !SERVER_FIELDS.includes(k)));
         const res = row.id
-          ? await api(`${path}/${row.id}`, { method: "PATCH", body: JSON.stringify(body) })
+          ? await api(`${path}/${row.id}`, { method: "PATCH", body: JSON.stringify({ ...body, reason: changeReason }) })
           : await api(path, { method: "POST", body: JSON.stringify(body) });
         return res.data;
       }
-      const { data, error } = await supabase.from(table as any).upsert(row).select().single();
+      // Tables still read straight from Supabase have no history yet, so the reason stops here.
+      const { data, error } = await supabase.from(table as any).upsert(fields).select().single();
       if (error) throw error;
       return data;
     },
@@ -95,6 +101,9 @@ export function useRemove(table: TableName) {
 
 export const ZAR = (n: number | null | undefined) =>
   new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", maximumFractionDigits: 0 }).format(Number(n ?? 0));
+
+/** Rand per ton, or "No production" when nothing was produced, never a misleading R0. */
+export const RPT = (n: number | null | undefined) => (n === null || n === undefined ? "No production" : ZAR(n));
 
 export const NUM = (n: number | null | undefined) =>
   new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(Number(n ?? 0));

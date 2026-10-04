@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { JobRun, ListQuery, Notification, Role, UserSummary } from "@reef/shared";
 import type { Machine } from "../services/service-due.js";
+import { DEFAULT_CAPTURE_MAX_AGE_DAYS } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type {
   AnalyticsRepository,
@@ -21,6 +22,8 @@ import type {
   RoleRepository,
   Row,
   SessionRepository,
+  Setting,
+  SettingsRepository,
   StockUsageRepository,
   ServiceSweepRepository,
   UpdateResult,
@@ -43,6 +46,8 @@ function translate(err: PgError): ApiError {
       );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
+    case "RF422":
+      return new ApiError("VALIDATION_FAILED", err.message);
     case "23514":
       // update_versioned raises this when the reason is missing.
       return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
@@ -703,5 +708,43 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
       .select("id");
     if (error) throw translate(error);
     return (data ?? []).length;
+  }
+}
+
+export class SupabaseSettings implements SettingsRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async list(): Promise<Setting[]> {
+    const { data, error } = await this.db
+      .from("settings")
+      .select("key, value, description, updated_at")
+      .order("key");
+    if (error) throw translate(error);
+    return (data ?? []) as Setting[];
+  }
+
+  async captureMaxAgeDays(): Promise<number> {
+    const { data, error } = await this.db
+      .from("settings")
+      .select("value")
+      .eq("key", "capture_max_age_days")
+      .maybeSingle();
+    // Before the settings migration is applied there is no table yet. Capture keeps working on
+    // the documented default rather than failing outright; any other error is still an error.
+    if (error && (error.code === "42P01" || error.code === "PGRST205"))
+      return DEFAULT_CAPTURE_MAX_AGE_DAYS;
+    if (error) throw translate(error);
+    return typeof data?.value === "number" ? data.value : DEFAULT_CAPTURE_MAX_AGE_DAYS;
+  }
+
+  async set(key: string, value: unknown, by: string): Promise<Setting | null> {
+    const { data, error } = await this.db
+      .from("settings")
+      .update({ value, updated_by: by })
+      .eq("key", key)
+      .select("key, value, description, updated_at")
+      .maybeSingle();
+    if (error) throw translate(error);
+    return (data as Setting) ?? null;
   }
 }

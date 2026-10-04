@@ -42,6 +42,8 @@ import type {
   ScopedRepository,
   ServiceSweepRepository,
   SessionRepository,
+  Setting,
+  SettingsRepository,
   StockUsageRepository,
   UpdateResult,
   UserContext,
@@ -409,8 +411,12 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     patch: StockPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<Stock>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -479,8 +485,12 @@ export class MemoryStockLevel implements ScopedRepository<
     patch: StockLevelPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<StockLevel>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -553,8 +563,12 @@ export class MemoryPurchaseOrder implements ScopedRepository<
     patch: PurchaseOrderPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<PurchaseOrder>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -864,6 +878,26 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   };
 
   const sessionRows: UserSession[] = [];
+  const settingsStore: Setting[] = [
+    {
+      key: "capture_max_age_days",
+      value: 60,
+      description: "How many days old an entry may be when it is captured.",
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  const settings: SettingsRepository = {
+    list: async () => settingsStore.map((x) => ({ ...x })),
+    captureMaxAgeDays: async () => Number(settingsStore[0].value),
+    set: async (key, value) => {
+      const row = settingsStore.find((x) => x.key === key);
+      if (!row) return null;
+      row.value = value;
+      row.updated_at = new Date().toISOString();
+      return { ...row };
+    },
+  };
+
   const logged: unknown[] = [];
 
   const { app, registry } = createApp({
@@ -890,6 +924,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
           plantFor: async () => user?.plant ?? null,
         },
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
+        settings,
         history,
         users,
         mines,
@@ -954,6 +989,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     retention,
     notifications,
     jobs,
+    settingsStore,
     logged,
     call,
   };

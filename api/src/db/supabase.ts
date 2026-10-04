@@ -9,6 +9,7 @@ import {
   SupabaseMaintenanceRepository,
   SupabasePhotoStore,
   SupabaseRoleRepository,
+  SupabaseSettings,
   SupabaseStockUsage,
   SupabaseHistoryRepository,
   SupabaseAnalyticsRepository,
@@ -52,6 +53,7 @@ export function supabaseRepositories(config: Config) {
       retention: new SupabaseRetentionRepository(db),
       notifications: new SupabaseNotificationRepository(db),
       jobs: new SupabaseJobRepository(db),
+      settings: new SupabaseSettings(db),
     };
   };
 }

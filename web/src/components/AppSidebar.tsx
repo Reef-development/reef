@@ -15,6 +15,7 @@ import {
   LineChart,
   Bot,
   Fuel,
+  History,
   MonitorSmartphone,
 } from "lucide-react";
 
@@ -113,6 +114,11 @@ const items = [
     title: "Static Costs",
     url: "/static-costs",
     icon: Receipt,
+  },
+  {
+    title: "Change History",
+    url: "/history",
+    icon: History,
   },
 ] as const;
 
