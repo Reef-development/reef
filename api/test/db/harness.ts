@@ -29,6 +29,10 @@ const SUPABASE_STUBS = `
   CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS
     $$ SELECT coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'authenticated') $$;
 
+  -- T14's policies read the caller's database role (authenticated, service_role, ...).
+  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS
+    $$ SELECT nullif(current_setting('request.jwt.claim.role', true), '') $$;
+
   CREATE SCHEMA storage;
   CREATE TABLE storage.objects (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,7 +61,8 @@ export async function migratedDb(): Promise<Db> {
     .filter((f) => f.endsWith(".sql"))
     .sort()) {
     try {
-      await pg.exec(readFileSync(MIGRATIONS + file, "utf8"));
+      // A byte-order mark is invisible in an editor but a syntax error to Postgres.
+      await pg.exec(readFileSync(MIGRATIONS + file, "utf8").replace(/^﻿/, ""));
     } catch (err) {
       throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
     }
