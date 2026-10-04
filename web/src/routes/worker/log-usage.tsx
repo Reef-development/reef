@@ -42,9 +42,9 @@ function Page() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Stock Usage</h1>
       <div className="space-y-2">
-        <Label>Item</Label>
+        <Label htmlFor="log-usage-item">Item</Label>
         <Select value={itemId} onValueChange={setItemId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select item" /></SelectTrigger>
+          <SelectTrigger id="log-usage-item" className="h-12 text-base"><SelectValue placeholder="Select item" /></SelectTrigger>
           <SelectContent>
             {stock.data?.map((s: any) => (
               <SelectItem key={s.id} value={s.id}>{s.name} · {NUM(s.qty_on_hand)} {s.unit ?? ""}</SelectItem>
@@ -53,8 +53,8 @@ function Page() {
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>Quantity used</Label>
-        <NumberField step="0.01" className="h-12 text-lg" value={qty} onValueChange={setQty} />
+        <Label htmlFor="log-usage-quantity-used">Quantity used</Label>
+        <NumberField id="log-usage-quantity-used" step="0.01" className="h-12 text-lg" value={qty} onValueChange={setQty} />
       </div>
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}

@@ -148,7 +148,7 @@ function Page() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={filterEquip} onValueChange={setFilterEquip}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="All vehicles" /></SelectTrigger>
+          <SelectTrigger className="w-56" aria-label="Filter by vehicle"><SelectValue placeholder="All vehicles" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All vehicles / tools</SelectItem>
             {equipment.data?.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
