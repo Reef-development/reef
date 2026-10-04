@@ -43,10 +43,6 @@ function translate(err: PgError): ApiError {
       );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
-    case "22023":
-      return new ApiError("VALIDATION_FAILED", err.message);
-    case "RF404":
-      return new ApiError("NOT_FOUND", "That stock item does not exist");
     case "23514":
       // update_versioned raises this when the reason is missing.
       return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
