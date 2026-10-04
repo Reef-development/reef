@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   HistoryQuery,
+  JobRun,
   ListQuery,
   Mine,
   MineInput,
@@ -14,16 +15,27 @@ import type {
   StockLevelInput,
   StockLevelPatch,
   StockPatch,
+  Notification,
 } from "@reef/shared";
+import type { Machine } from "../src/services/service-due.js";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type {
+  AnalyticsRepository,
   HistoryEntry,
   HistoryRepository,
+  JobRepository,
+  Leaver,
+  NotificationDraft,
+  NotificationRepository,
   Page,
+  Period,
+  ProductionTotals,
   Repository,
+  RetentionRepository,
   ScopedRepository,
+  ServiceSweepRepository,
   SessionRepository,
   UpdateResult,
   UserContext,
@@ -483,11 +495,205 @@ export class MemoryPurchaseOrder implements ScopedRepository<
   }
 }
 
+/**
+ * Figures held in memory, so the money arithmetic and the assistant can be tested without a
+ * database. Every method takes the same period the real one does and filters on it, because a
+ * fake that ignores the period would let a boundary fault pass.
+ */
+export class MemoryAnalytics implements AnalyticsRepository {
+  sites: { id: string; name: string }[] = [];
+  production: {
+    mine_id: string;
+    date: string;
+    tons: number;
+    magnetite: number;
+    overtime: number;
+  }[] = [];
+  fixed: { mine_id: string; month: string; amount: number }[] = [];
+  maintenance: { mine_id: string; date: string; cost: number }[] = [];
+  fuel: { mine_id: string; date: string; cost: number }[] = [];
+  downtime: { mine_id: string; date: string; reason: string; hours: number }[] = [];
+
+  private within(date: string, p: Period) {
+    return date >= p.from && date <= p.to;
+  }
+
+  async mines() {
+    await tick();
+    return this.sites;
+  }
+
+  async productionTotals(mineId: string, period: Period): Promise<ProductionTotals> {
+    const rows = this.production.filter((r) => r.mine_id === mineId && this.within(r.date, period));
+    return {
+      tons: rows.reduce((t, r) => t + r.tons, 0),
+      magnetiteCost: rows.reduce((t, r) => t + r.magnetite, 0),
+      overtimeCost: rows.reduce((t, r) => t + r.overtime, 0),
+      days: new Set(rows.map((r) => r.date)).size,
+    };
+  }
+
+  async productionByDay(mineId: string, period: Period) {
+    return this.production
+      .filter((r) => r.mine_id === mineId && this.within(r.date, period))
+      .map((r) => ({ date: r.date, tons: r.tons }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  /** The same day-share apportionment the Supabase one does, on whole months only. */
+  async fixedCosts(mineId: string, period: Period) {
+    const days = (from: string, to: string) =>
+      Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) +
+      1;
+    let total = 0;
+    for (const row of this.fixed.filter((r) => r.mine_id === mineId)) {
+      const first = `${row.month}-01`;
+      const [y, m] = row.month.split("-").map(Number) as [number, number];
+      const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+      const from = first > period.from ? first : period.from;
+      const to = last < period.to ? last : period.to;
+      if (from > to) continue;
+      total += row.amount * (days(from, to) / days(first, last));
+    }
+    return total;
+  }
+
+  async maintenanceCost(mineId: string, period: Period) {
+    return this.maintenance
+      .filter((r) => r.mine_id === mineId && this.within(r.date, period))
+      .reduce((t, r) => t + r.cost, 0);
+  }
+
+  async fuelCost(mineId: string, period: Period) {
+    return this.fuel
+      .filter((r) => r.mine_id === mineId && this.within(r.date, period))
+      .reduce((t, r) => t + r.cost, 0);
+  }
+
+  async downtimeHours(mineId: string, period: Period) {
+    const byReason = new Map<string, number>();
+    for (const row of this.downtime.filter(
+      (r) => r.mine_id === mineId && this.within(r.date, period),
+    )) {
+      byReason.set(row.reason, (byReason.get(row.reason) ?? 0) + row.hours);
+    }
+    return [...byReason.entries()]
+      .map(([reason, hours]) => ({ reason, hours }))
+      .sort((a, b) => b.hours - a.hours);
+  }
+}
+
+/** Leavers held in memory. The identity number is a yes or no here, as it is in the real one. */
+export class MemoryRetention implements RetentionRepository {
+  rows: Leaver[] = [];
+  async leavers() {
+    await tick();
+    return [...this.rows];
+  }
+}
+
+/** Notifications in memory, with the same suppression rule the database index enforces. */
+export class MemoryNotifications implements NotificationRepository {
+  // dedupe_key is required here because it is required in the table: the suppression rule is
+  // a plain unique constraint over every row, not a partial index.
+  rows: (Notification & { user_id: string; dedupe_key: string })[] = [];
+
+  async list(userId: string, opts: { unread?: boolean; limit: number }) {
+    await tick();
+    return this.rows
+      .filter((r) => r.user_id === userId && (!opts.unread || r.read_at === null))
+      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+      .slice(0, opts.limit)
+      .map(({ user_id: _u, dedupe_key: _d, ...rest }) => rest);
+  }
+
+  async markRead(userId: string, id: string) {
+    await tick();
+    const row = this.rows.find((r) => r.id === id && r.user_id === userId && r.read_at === null);
+    if (!row) return false;
+    row.read_at = new Date().toISOString();
+    return true;
+  }
+}
+
+/** Scheduled runs in memory. `claim` races the way the unique constraint does. */
+export class MemoryJobs implements JobRepository {
+  rows: (JobRun & { id: string })[] = [];
+
+  async claim(job: string, ranFor: string) {
+    // No await before the check: the claim has to be one step, like the insert it stands for.
+    if (this.rows.some((r) => r.job === job && r.ran_for === ranFor)) return false;
+    this.rows.push({
+      id: randomUUID(),
+      job,
+      ran_for: ranFor,
+      started_at: new Date().toISOString(),
+      finished_at: null,
+      outcome: null,
+      detail: null,
+    });
+    return true;
+  }
+
+  async finish(job: string, ranFor: string, outcome: string, detail: string) {
+    await tick();
+    const row = this.rows.find((r) => r.job === job && r.ran_for === ranFor);
+    if (row) Object.assign(row, { finished_at: new Date().toISOString(), outcome, detail });
+  }
+
+  async runs(job: string, from: string, to: string) {
+    await tick();
+    return this.rows.filter((r) => r.job === job && r.ran_for >= from && r.ran_for <= to);
+  }
+}
+
+/** What the sweep reads, and the notifications it raises, held in memory. */
+export class MemorySweep implements ServiceSweepRepository {
+  rows: Machine[] = [];
+  /** Told about every machine, whatever plant it sits at. */
+  owners: string[] = [];
+  /** Plant name to the managers who belong to it. */
+  managers: Record<string, string[]> = {};
+  /** Mine id to the plant that operates it. A mine missing here has no plant recorded. */
+  plantOfMine: Record<string, string> = {};
+  raised: NotificationDraft[] = [];
+  failWith: Error | null = null;
+
+  async machines() {
+    await tick();
+    if (this.failWith) throw this.failWith;
+    return this.rows;
+  }
+  async recipients(mineId: string | null) {
+    await tick();
+    const plant = mineId ? this.plantOfMine[mineId] : undefined;
+    const atPlant = plant ? (this.managers[plant] ?? []) : [];
+    return [...new Set([...this.owners, ...atPlant])];
+  }
+  async raise(drafts: readonly NotificationDraft[]) {
+    await tick();
+    let created = 0;
+    for (const d of drafts) {
+      const already = this.raised.some(
+        (r) => r.user_id === d.user_id && r.dedupe_key === d.dedupe_key,
+      );
+      if (already) continue;
+      this.raised.push(d);
+      created += 1;
+    }
+    return created;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   const stock = new MemoryStock();
   const stockLevels = new MemoryStockLevel();
   const purchaseOrders = new MemoryPurchaseOrder();
+  const analytics = new MemoryAnalytics();
+  const retention = new MemoryRetention();
+  const notifications = new MemoryNotifications();
+  const jobs = new MemoryJobs();
 
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
@@ -524,6 +730,10 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         stock,
         stockLevels,
         purchaseOrders,
+        analytics,
+        retention,
+        notifications,
+        jobs,
         ...overrides,
       };
     },
@@ -562,6 +772,10 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     purchaseOrders,
     history,
     sessionRows,
+    analytics,
+    retention,
+    notifications,
+    jobs,
     logged,
     call,
   };

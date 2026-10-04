@@ -19,6 +19,10 @@ type History = {
 
 beforeAll(async () => {
   db = await migratedDb();
+  // Plant 'A' has to exist before anything can belong to it. 20261005090000_plants.sql makes
+  // the set of plants a table and points every plant column at it, so a plant nobody has heard
+  // of is refused when it is written rather than accepted and then matching nothing for ever.
+  await db.query("INSERT INTO plants (name) VALUES ('A') ON CONFLICT DO NOTHING");
   owner = await db.user("owner");
   manager = await db.user("manager");
   worker = await db.user("worker");
