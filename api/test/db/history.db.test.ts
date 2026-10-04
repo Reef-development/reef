@@ -159,7 +159,7 @@ describe("T6: changes that do not come through the API still work, and are still
       [eq.id],
     );
     const item = await one<{ id: string }>(
-      "INSERT INTO stock_items (name, qty_on_hand, unit_cost) VALUES ('Bearing', 10, 100) RETURNING id",
+      "INSERT INTO stock_items (name, qty_on_hand, unit_cost, plant) VALUES ('Bearing', 10, 100, 'A') RETURNING id",
     );
 
     await db.query(
@@ -180,10 +180,10 @@ describe("T6: changes that do not come through the API still work, and are still
 
   it("receiving a purchase order straight in Supabase still adds to stock", async () => {
     const item = await one<{ id: string }>(
-      "INSERT INTO stock_items (name, qty_on_hand, unit_cost) VALUES ('Belt', 2, 100) RETURNING id",
+      "INSERT INTO stock_items (name, qty_on_hand, unit_cost, plant) VALUES ('Belt', 2, 100, 'A') RETURNING id",
     );
     const po = await one<{ id: string }>(
-      "INSERT INTO purchase_orders (status) VALUES ('ordered') RETURNING id",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'A') RETURNING id",
     );
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 5, 100)",
@@ -204,10 +204,10 @@ describe("T6: changes that do not come through the API still work, and are still
 
   it("a stock change set off by an API change carries that change's reason", async () => {
     const item = await one<{ id: string }>(
-      "INSERT INTO stock_items (name, qty_on_hand, unit_cost) VALUES ('Liner', 1, 100) RETURNING id",
+      "INSERT INTO stock_items (name, qty_on_hand, unit_cost, plant) VALUES ('Liner', 1, 100, 'A') RETURNING id",
     );
     const po = await one<{ id: string; version: number }>(
-      "INSERT INTO purchase_orders (status) VALUES ('ordered') RETURNING id, version",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'A') RETURNING id, version",
     );
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 4, 100)",

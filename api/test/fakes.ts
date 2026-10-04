@@ -5,7 +5,16 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
   Role,
+  Stock,
+  StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
+  StockPatch,
   UserSummary,
 } from "@reef/shared";
 import { createApp } from "../src/app.js";
@@ -16,25 +25,32 @@ import type {
   HistoryRepository,
   Page,
   Repository,
+  ScopedRepository,
   UpdateResult,
+  UserContext,
   UserRepository,
 } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Token → user and the roles stored for them, standing in for Supabase Auth and `user_roles`. */
-export const USERS: Record<string, { id: string; roles: string[] }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"] },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"] },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"] },
-  "legacy-token": { id: "00000000-0000-4000-8000-000000000004", roles: ["stock_controller"] },
+/** Token → user, their roles, and their plant (null for the owner, who sees every plant). */
+export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
+  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
+  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
+  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "no-plant-token": {
+    id: "00000000-0000-4000-8000-000000000005",
+    roles: ["manager"],
+    plant: null,
+  },
+  "legacy-token": {
+    id: "00000000-0000-4000-8000-000000000004",
+    roles: ["stock_controller"],
+    plant: "A",
+  },
 };
 
-/**
- * The in-memory stand-in for the history table. Rows are appended, never updated or
- * deleted. Tests read it to assert a change was recorded.
- */
 export class MemoryHistory implements HistoryRepository {
   rows: HistoryEntry[] = [];
 
@@ -57,10 +73,6 @@ export class MemoryHistory implements HistoryRepository {
   }
 }
 
-/**
- * The columns that differ between `before` and `after`. Mirrors the diff in the database
- * trigger, so a test can predict exactly what the history row will contain.
- */
 function diff(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -74,6 +86,17 @@ function diff(
     }
   }
   return { old, next };
+}
+
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
 }
 
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
@@ -113,13 +136,6 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     this.rows.push(row);
     return row;
   }
-
-  /**
-   * Mirrors update_versioned: if the reason is missing, throw. The real procedure
-   * raises a check_violation, which the repository translates to a 400, so a fake that
-   * just silently accepts an empty reason would hide the exact bug we are guarding
-   * against.
-   */
   async update(
     id: string,
     patch: MinePatch,
@@ -130,20 +146,16 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
     if (!reason || reason.trim() === "") {
       throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
     }
-
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
-
     const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     const after = { ...row };
-
     const { old, next } = diff(
       before as unknown as Record<string, unknown>,
       after as unknown as Record<string, unknown>,
     );
-
     const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
     this.history.append({
       table_name: "mines",
@@ -155,10 +167,8 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
       new_values: next,
       version: after.version,
     });
-
     return { status: "updated", row: after };
   }
-
   async remove(id: string) {
     const before = this.rows.length;
     this.rows = this.rows.filter((r) => r.id !== id);
@@ -176,7 +186,7 @@ export class MemoryUsers implements UserRepository {
     full_name: token.replace("-token", ""),
     email: `${token.replace("-token", "")}@reef.test`,
     role: (["owner", "manager", "worker"].find((r) => u.roles.includes(r)) ?? null) as Role | null,
-    plant: null,
+    plant: u.plant,
     created_at: "2026-09-01T00:00:00Z",
   }));
 
@@ -216,12 +226,218 @@ export class MemoryUsers implements UserRepository {
   }
 }
 
+export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
+  rows: Stock[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<Stock>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "name") as keyof Stock;
+    const sorted = [...visible].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<Stock | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockInput, user: UserContext): Promise<Stock> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: Stock = {
+      id: randomUUID(),
+      sku: null,
+      unit: null,
+      unit_cost: 0,
+      supplier_id: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: StockPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<Stock>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
+  rows: StockLevel[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof StockLevel;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<StockLevel | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: StockLevel = {
+      id: randomUUID(),
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: StockLevelPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<StockLevel>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryPurchaseOrder implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
+  rows: PurchaseOrder[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "created_at") as keyof PurchaseOrder;
+    const sorted = [...visible].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      if (typeof av === "number" && typeof bv === "number") return av - bv;
+      return String(av).localeCompare(String(bv));
+    });
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<PurchaseOrder | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      supplier_id: null,
+      status: "draft",
+      total_cost: 0,
+      notes: null,
+      approved_at: null,
+      ordered_at: null,
+      received_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: PurchaseOrderPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<PurchaseOrder>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
+  const stock = new MemoryStock();
+  const stockLevels = new MemoryStockLevel();
+  const purchaseOrders = new MemoryPurchaseOrder();
 
-  // The fake gets a "current user id" function so it can stamp history rows with the
-  // actor the same way the trigger does (via auth.uid()). The value is set inside the
-  // repositories closure, so it changes per request.
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
   const users = new MemoryUsers(history, () => currentUserId);
@@ -237,10 +453,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     repositories: (token) => {
       currentUserId = USERS[token]?.id ?? null;
       return {
-        roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        roles: {
+          forUser: async () => USERS[token]?.roles ?? [],
+          plantFor: async () => USERS[token]?.plant ?? null,
+        },
         history,
         users,
         mines,
+        stock,
+        stockLevels,
+        purchaseOrders,
         ...overrides,
       };
     },
@@ -262,5 +484,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, history, users, logged, call };
+  return { app, registry, mines, stock, stockLevels, purchaseOrders, history, users, logged, call };
 }

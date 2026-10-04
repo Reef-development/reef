@@ -38,6 +38,8 @@ export interface Repository<Row, Input, Patch> {
 export interface RoleRepository {
   /** Every role name held by the user, as stored. */
   forUser(userId: string): Promise<string[]>;
+  /** The plant this user belongs to. Null for the owner, who sees every plant. */
+  plantFor(userId: string): Promise<string | null>;
 }
 
 /**
@@ -67,4 +69,30 @@ export interface UserRepository {
   list(): Promise<UserSummary[]>;
   /** Sets one person's role and records why. Null if there is no such account. */
   setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null>;
+}
+
+/** Who is asking. `plant` is null for the owner, who sees every plant. */
+export type UserContext = {
+  role: string;
+  plant: string | null;
+};
+
+/**
+ * Same as `Repository`, but every method receives the caller, so the implementation can
+ * scope its queries. Stock uses this: a manager or worker sees only their own plant; an
+ * owner sees every plant. The plant filter lives inside the implementation, so a route
+ * that forgets to pass the user cannot compile, and a screen that forgets to filter
+ * cannot leak.
+ */
+export interface ScopedRepository<Row, Input, Patch> {
+  list(query: ListQuery, user: UserContext): Promise<Page<Row>>;
+  get(id: string, user: UserContext): Promise<Row | null>;
+  create(input: Input, user: UserContext): Promise<Row>;
+  update(
+    id: string,
+    patch: Patch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<Row>>;
+  remove(id: string, user: UserContext): Promise<boolean>;
 }
