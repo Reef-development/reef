@@ -187,12 +187,14 @@ describe("T6: changes that do not come through the API still work, and are still
       "INSERT INTO stock_items (name, qty_on_hand, unit_cost, plant) VALUES ('Belt', 2, 100, 'A') RETURNING id",
     );
     const po = await one<{ id: string }>(
-      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'A') RETURNING id",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('draft', 'A') RETURNING id",
     );
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 5, 100)",
       [po.id, item.id],
     );
+    // Lines go on while it is a draft; then it is approved (purchase order rules).
+    await db.query("UPDATE purchase_orders SET status = 'approved' WHERE id = $1", [po.id]);
 
     await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.id]);
 
@@ -211,12 +213,14 @@ describe("T6: changes that do not come through the API still work, and are still
       "INSERT INTO stock_items (name, qty_on_hand, unit_cost, plant) VALUES ('Liner', 1, 100, 'A') RETURNING id",
     );
     const po = await one<{ id: string; version: number }>(
-      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'A') RETURNING id, version",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('draft', 'A') RETURNING id, version",
     );
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 4, 100)",
       [po.id, item.id],
     );
+    // Lines go on while it is a draft; then it is approved (purchase order rules).
+    await db.query("UPDATE purchase_orders SET status = 'approved' WHERE id = $1", [po.id]);
     const v = (
       await one<{ version: number }>("SELECT version FROM purchase_orders WHERE id = $1", [po.id])
     ).version;

@@ -14,8 +14,13 @@ beforeAll(async () => {
   owner = await db.user("owner");
   kriel = await db.user("manager");
   ogies = await db.user("manager");
-  await db.query("UPDATE profiles SET plant = 'Kriel' WHERE id = $1", [kriel]);
-  await db.query("UPDATE profiles SET plant = 'Ogies' WHERE id = $1", [ogies]);
+  // Plants are a list (#57), and only the service role may give someone a plant (T14).
+  await db.query("INSERT INTO plants (name) VALUES ('Kriel'), ('Ogies') ON CONFLICT DO NOTHING");
+  await db.transaction(async (tx) => {
+    await tx.query("SELECT set_config('request.jwt.claim.role', 'service_role', true)");
+    await tx.query("UPDATE profiles SET plant = 'Kriel' WHERE id = $1", [kriel]);
+    await tx.query("UPDATE profiles SET plant = 'Ogies' WHERE id = $1", [ogies]);
+  });
 }, 60_000);
 
 const one = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
