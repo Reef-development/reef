@@ -1,43 +1,93 @@
 import type { Hono } from "hono";
-import type { ZodObject, ZodType } from "zod";
-import { Id, ListQuery, versioned, type Permission } from "@reef/shared";
+import { z } from "zod";
+import { ListQuery } from "@reef/shared";
 import type { AppEnv } from "../app.js";
-import { parseBody, parseWith } from "../http/body.js";
-import { ok } from "../http/envelope.js";
+import { parseWith } from "../http/body.js";
 import { ApiError } from "../http/errors.js";
+import { ok } from "../http/envelope.js";
+import { type Permission } from "@reef/shared";
 import type { Registry } from "../registry.js";
 import type { Repositories } from "../repositories/index.js";
 import type { Repository, ScopedRepository, UserContext } from "../repositories/types.js";
 import { defineRoute } from "./define.js";
 
-type ResourceSpec = {
-  /** Plural path segment, e.g. "mines". */
+type Summaries = {
+  list: string;
+  get: string;
+  create: string;
+  update: string;
+  remove: string;
+};
+
+type ResourceSpec<Row, Input, Patch> = {
   name: string;
-  /** Singular noun for messages, e.g. "site". */
   noun: string;
-  repo: (r: Repositories) => Repository<unknown, unknown, unknown>;
-  input: ZodType;
-  /**
-   * Fields a client may change. The factory adds the required `version` and the required
-   * `reason` itself, so every update carries both.
-   */
-  patch: ZodObject;
+  repo: (repos: Repositories) => Repository<Row, Input, Patch>;
+  input: z.ZodType<Input>;
+  patch: z.ZodType<Patch>;
   sortable: readonly string[];
   read: Permission;
   write: Permission;
-  summaries: { list: string; get: string; create: string; update: string; remove: string };
+  summaries: Summaries;
 };
 
-/**
- * Registers list, get, create, update and delete for one table. Most of the platform's
- * resources are plain records, so this keeps them identical in behaviour instead of
- * sixteen hand-written copies that drift apart.
- */
-export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: ResourceSpec) {
+type ScopedResourceSpec<Row, Input, Patch> = {
+  name: string;
+  noun: string;
+  repo: (repos: Repositories) => ScopedRepository<Row, Input, Patch>;
+  input: z.ZodType<Input>;
+  patch: z.ZodType<Patch>;
+  sortable: readonly string[];
+  read: Permission;
+  write: Permission;
+  summaries: Summaries;
+};
+
+/** Turns a Zod issue into the shape the error envelope expects. */
+function validationError(err: z.ZodError): ApiError {
+  return new ApiError("VALIDATION_FAILED", "One or more fields are invalid", err.issues);
+}
+
+/** A single-field validation error in the same shape Zod uses. */
+function fieldError(field: string, message: string): ApiError {
+  return new ApiError("VALIDATION_FAILED", message, [{ path: field, message }]);
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function requireId(c: { req: { param: (n: string) => string | undefined } }): string {
+  const id = c.req.param("id");
+  if (!id) {
+    throw fieldError("id", "An id is required");
+  }
+  if (!UUID_RE.test(id)) {
+    throw fieldError("id", "The id must be a UUID");
+  }
+  return id;
+}
+
+async function readBody(c: {
+  req: { json: () => Promise<unknown> };
+}): Promise<Record<string, unknown>> {
+  try {
+    const parsed = await c.req.json();
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new ApiError("VALIDATION_FAILED", "The body must be a JSON object");
+    }
+    return parsed as Record<string, unknown>;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError("VALIDATION_FAILED", "The body is not valid JSON");
+  }
+}
+
+/** Lists, reads, creates, updates and removes one resource, with permission checks. */
+export function resourceRoutes<Row extends { id: string; version: number }, Input, Patch>(
+  app: Hono<AppEnv>,
+  registry: Registry,
+  spec: ResourceSpec<Row, Input, Patch>,
+) {
   const base = `/api/v1/${spec.name}`;
-  const Update = versioned(spec.patch);
-  const notFound = () =>
-    new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
   const Query = ListQuery.refine((q) => !q.sort || spec.sortable.includes(q.sort), {
     message: `Sort by one of: ${spec.sortable.join(", ")}`,
     path: ["sort"],
@@ -51,7 +101,6 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: base,
       access: spec.read,
       summary: spec.summaries.list,
-      refuses: "An unknown sort column or a page size above 200.",
     },
     async (c) => {
       const q = parseWith(Query, c.req.query());
@@ -68,12 +117,13 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: `${base}/:id`,
       access: spec.read,
       summary: spec.summaries.get,
-      refuses: "An id that is not a UUID, or a record that does not exist.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
+      const id = requireId(c);
       const row = await spec.repo(c.var.repos).get(id);
-      if (!row) throw notFound();
+      if (!row) {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
       return ok(c, row);
     },
   );
@@ -86,11 +136,12 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: base,
       access: spec.write,
       summary: spec.summaries.create,
-      refuses: "Missing or invalid fields, and any field it does not recognise.",
     },
     async (c) => {
-      const body = await parseBody(c, spec.input);
-      const row = await spec.repo(c.var.repos).create(body);
+      const body = await readBody(c);
+      const parsed = spec.input.safeParse(body);
+      if (!parsed.success) throw validationError(parsed.error);
+      const row = await spec.repo(c.var.repos).create(parsed.data);
       return ok(c, row, 201);
     },
   );
@@ -103,25 +154,34 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: `${base}/:id`,
       access: spec.write,
       summary: spec.summaries.update,
-      refuses:
-        "Invalid or unrecognised fields, a missing version, a missing reason, or a version older than the stored one. " +
-        "The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
-      // The schema is built per resource. TypeScript only knows it adds `version` and `reason`;
-      // the rest of the fields are the patch's own. Destructure both out so neither ends up in
-      // the patch sent to the repository.
-      const { version, reason, ...changes } = (await parseBody(c, Update)) as {
-        version: number;
-        reason: string;
-      } & Record<string, unknown>;
-      const result = await spec.repo(c.var.repos).update(id, changes, version, reason);
-      if (result.status === "missing") throw notFound();
+      const id = requireId(c);
+      const body = await readBody(c);
+      const version = body.version;
+      const reason = body.reason;
+      delete body.version;
+      delete body.reason;
+
+      if (typeof version !== "number") {
+        throw fieldError("version", "A version is required to change a record");
+      }
+      if (typeof reason !== "string" || reason.trim() === "") {
+        throw fieldError("reason", "A reason is required when changing a record");
+      }
+
+      const parsed = spec.patch.safeParse(body);
+      if (!parsed.success) throw validationError(parsed.error);
+
+      const result = await spec.repo(c.var.repos).update(id, parsed.data, version, reason);
+
+      if (result.status === "missing") {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
       if (result.status === "stale") {
         throw new ApiError(
           "CONFLICT",
-          `Someone else changed this ${spec.noun} after you opened it, so your changes were not saved. Reload it and try again.`,
+          `Someone else changed this ${spec.noun} since you opened it`,
           { current: result.current },
         );
       }
@@ -137,54 +197,35 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
       path: `${base}/:id`,
       access: spec.write,
       summary: spec.summaries.remove,
-      refuses: "A record that does not exist, or one that other records still point to.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
+      const id = requireId(c);
       const removed = await spec.repo(c.var.repos).remove(id);
-      if (!removed) throw notFound();
-      return ok(c, { id, deleted: true });
+      if (!removed) {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
+      return ok(c, { removed: true });
     },
   );
 }
 
-type ScopedResourceSpec = {
-  /** Plural path segment, e.g. "stock". */
-  name: string;
-  /** Singular noun for messages, e.g. "stock item". */
-  noun: string;
-  repo: (r: Repositories) => ScopedRepository<unknown, unknown, unknown>;
-  input: ZodType;
-  /** Fields a client may change. The factory adds the required `version` itself. */
-  patch: ZodObject;
-  sortable: readonly string[];
-  read: Permission;
-  write: Permission;
-  summaries: { list: string; get: string; create: string; update: string; remove: string };
-};
-
 /**
- * The same five routes as `resourceRoutes`, for a repository that scopes its queries by the
- * caller. Every handler passes the caller's role and plant down, so the plant filter runs
- * inside the repository — a route cannot forget it, and a screen cannot bypass it.
+ * Same as `resourceRoutes`, but every request carries the caller into the repository, so
+ * the repository can enforce its own scoping. Used by the plant-scoped resources: stock,
+ * stock levels and purchase orders.
  */
-export function scopedResourceRoutes(
+export function scopedResourceRoutes<Row extends { id: string; version: number }, Input, Patch>(
   app: Hono<AppEnv>,
   registry: Registry,
-  spec: ScopedResourceSpec,
+  spec: ScopedResourceSpec<Row, Input, Patch>,
 ) {
   const base = `/api/v1/${spec.name}`;
-  const Update = versioned(spec.patch);
-  const notFound = () =>
-    new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
   const Query = ListQuery.refine((q) => !q.sort || spec.sortable.includes(q.sort), {
     message: `Sort by one of: ${spec.sortable.join(", ")}`,
     path: ["sort"],
   });
 
-  const ctx = (c: {
-    var: { user: { role: string | null; plant: string | null } };
-  }): UserContext => ({
+  const caller = (c: { var: AppEnv["Variables"] }): UserContext => ({
     role: c.var.user.role ?? "",
     plant: c.var.user.plant,
   });
@@ -197,11 +238,10 @@ export function scopedResourceRoutes(
       path: base,
       access: spec.read,
       summary: spec.summaries.list,
-      refuses: "An unknown sort column or a page size above 200.",
     },
     async (c) => {
       const q = parseWith(Query, c.req.query());
-      const { rows, total } = await spec.repo(c.var.repos).list(q, ctx(c));
+      const { rows, total } = await spec.repo(c.var.repos).list(q, caller(c));
       return ok(c, rows, 200, { page: q.page, pageSize: q.pageSize, total });
     },
   );
@@ -214,12 +254,13 @@ export function scopedResourceRoutes(
       path: `${base}/:id`,
       access: spec.read,
       summary: spec.summaries.get,
-      refuses: "An id that is not a UUID, or a record that does not exist.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
-      const row = await spec.repo(c.var.repos).get(id, ctx(c));
-      if (!row) throw notFound();
+      const id = requireId(c);
+      const row = await spec.repo(c.var.repos).get(id, caller(c));
+      if (!row) {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
       return ok(c, row);
     },
   );
@@ -232,11 +273,12 @@ export function scopedResourceRoutes(
       path: base,
       access: spec.write,
       summary: spec.summaries.create,
-      refuses: "Missing or invalid fields, and any field it does not recognise.",
     },
     async (c) => {
-      const body = await parseBody(c, spec.input);
-      const row = await spec.repo(c.var.repos).create(body, ctx(c));
+      const body = await readBody(c);
+      const parsed = spec.input.safeParse(body);
+      if (!parsed.success) throw validationError(parsed.error);
+      const row = await spec.repo(c.var.repos).create(parsed.data, caller(c));
       return ok(c, row, 201);
     },
   );
@@ -249,22 +291,34 @@ export function scopedResourceRoutes(
       path: `${base}/:id`,
       access: spec.write,
       summary: spec.summaries.update,
-      refuses:
-        "Invalid or unrecognised fields, a missing version, or a version older than the stored one. " +
-        "The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
-      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<
-        string,
-        unknown
-      >;
-      const result = await spec.repo(c.var.repos).update(id, changes, version, ctx(c));
-      if (result.status === "missing") throw notFound();
+      const id = requireId(c);
+      const body = await readBody(c);
+      const version = body.version;
+      const reason = body.reason;
+      delete body.version;
+      delete body.reason;
+
+      if (typeof version !== "number") {
+        throw fieldError("version", "A version is required to change a record");
+      }
+      if (typeof reason !== "string" || reason.trim() === "") {
+        throw fieldError("reason", "A reason is required when changing a record");
+      }
+
+      const parsed = spec.patch.safeParse(body);
+      if (!parsed.success) throw validationError(parsed.error);
+
+      const result = await spec.repo(c.var.repos).update(id, parsed.data, version, caller(c));
+
+      if (result.status === "missing") {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
       if (result.status === "stale") {
         throw new ApiError(
           "CONFLICT",
-          `Someone else changed this ${spec.noun} after you opened it, so your changes were not saved. Reload it and try again.`,
+          `Someone else changed this ${spec.noun} since you opened it`,
           { current: result.current },
         );
       }
@@ -280,13 +334,14 @@ export function scopedResourceRoutes(
       path: `${base}/:id`,
       access: spec.write,
       summary: spec.summaries.remove,
-      refuses: "A record that does not exist, or one that other records still point to.",
     },
     async (c) => {
-      const id = parseWith(Id, c.req.param("id"));
-      const removed = await spec.repo(c.var.repos).remove(id, ctx(c));
-      if (!removed) throw notFound();
-      return ok(c, { id, deleted: true });
+      const id = requireId(c);
+      const removed = await spec.repo(c.var.repos).remove(id, caller(c));
+      if (!removed) {
+        throw new ApiError("NOT_FOUND", `That ${spec.noun} does not exist or has been removed`);
+      }
+      return ok(c, { removed: true });
     },
   );
 }

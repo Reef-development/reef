@@ -7,6 +7,15 @@ import {
   MINE_SORTABLE,
   MineInput,
   MinePatch,
+  PURCHASE_ORDER_SORTABLE,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
+  STOCK_LEVEL_SORTABLE,
+  STOCK_SORTABLE,
+  StockInput,
+  StockLevelInput,
+  StockLevelPatch,
+  StockPatch,
   SUPPLIER_SORTABLE,
   SupplierInput,
   SupplierPatch,
@@ -16,7 +25,7 @@ import { parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
 import { defineRoute } from "./define.js";
-import { resourceRoutes } from "./resource.js";
+import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 
 export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   defineRoute(
@@ -122,6 +131,65 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       update:
         "Changes a client's details or contract. Refuses a save from an out-of-date copy, so nobody overwrites a change they never saw.",
       remove: "Deletes a client. Refuses if a mine still points to it.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "stock",
+    noun: "stock item",
+    repo: (r) => r.stock,
+    input: StockInput,
+    patch: StockPatch,
+    sortable: STOCK_SORTABLE,
+    read: "stock:read",
+    write: "stock:write",
+    summaries: {
+      list: "Lists stock items for the caller's plant. An owner sees every plant; everyone else sees only their own.",
+      get: "Returns one stock item, or 404 if it belongs to another plant.",
+      create:
+        "Adds a stock item. The plant is taken from the caller, except for an owner, who may set it.",
+      update:
+        "Changes a stock item's details or its levels. Refuses a save from an out-of-date copy.",
+      remove: "Deletes a stock item. Refuses if the caller cannot see it.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "stock-levels",
+    noun: "stock level",
+    repo: (r) => r.stockLevels,
+    input: StockLevelInput,
+    patch: StockLevelPatch,
+    sortable: STOCK_LEVEL_SORTABLE,
+    read: "stock:read",
+    write: "stock:write",
+    summaries: {
+      list: "Lists per-plant stock levels. An owner sees every plant; everyone else sees only their own.",
+      get: "Returns one stock level, or 404 if it belongs to another plant.",
+      create:
+        "Adds a stock level. The plant is taken from the caller, except for an owner, who may set it.",
+      update:
+        "Changes a stock level. Refuses a save from an out-of-date copy, so nobody overwrites a change they never saw.",
+      remove: "Deletes a stock level. Refuses if the caller cannot see it.",
+    },
+  });
+
+  scopedResourceRoutes(app, registry, {
+    name: "purchase-orders",
+    noun: "purchase order",
+    repo: (r) => r.purchaseOrders,
+    input: PurchaseOrderInput,
+    patch: PurchaseOrderPatch,
+    sortable: PURCHASE_ORDER_SORTABLE,
+    read: "po:read",
+    write: "po:write",
+    summaries: {
+      list: "Lists purchase orders for the caller's plant. Owners and managers only — a worker cannot place orders.",
+      get: "Returns one purchase order, or 404 if it belongs to another plant.",
+      create: "Adds a purchase order. Managers and owners only.",
+      update:
+        "Changes a purchase order's status or details. Refuses a save from an out-of-date copy.",
+      remove: "Deletes a purchase order. Refuses if the caller cannot see it.",
     },
   });
 }

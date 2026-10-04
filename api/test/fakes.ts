@@ -8,6 +8,15 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
+  Stock,
+  StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
+  StockPatch,
   Supplier,
   SupplierInput,
   SupplierPatch,
@@ -20,16 +29,27 @@ import type {
   HistoryRepository,
   Page,
   Repository,
+  ScopedRepository,
   UpdateResult,
+  UserContext,
 } from "../src/repositories/types.js";
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-export const USERS: Record<string, { id: string; roles: string[] }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"] },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"] },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"] },
-  "legacy-token": { id: "00000000-0000-4000-8000-000000000004", roles: ["stock_controller"] },
+export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
+  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
+  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
+  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
+  "no-plant-token": {
+    id: "00000000-0000-4000-8000-000000000005",
+    roles: ["manager"],
+    plant: null,
+  },
+  "legacy-token": {
+    id: "00000000-0000-4000-8000-000000000004",
+    roles: ["stock_controller"],
+    plant: "A",
+  },
 };
 
 export class MemoryHistory implements HistoryRepository {
@@ -61,6 +81,17 @@ function diff(
     }
   }
   return { old, next };
+}
+
+function plantForCreate(input: { plant: string }, user: UserContext): string {
+  if (user.role === "owner") return input.plant;
+  if (!user.plant) {
+    throw new ApiError(
+      "FORBIDDEN",
+      "You do not have a plant assigned, so you cannot create this record",
+    );
+  }
+  return user.plant;
 }
 
 export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
@@ -138,6 +169,197 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
+export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
+  rows: Stock[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<Stock>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const key = (q.sort ?? "name") as keyof Stock;
+    const sorted = [...visible].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<Stock | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockInput, user: UserContext): Promise<Stock> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input, user);
+    const row: Stock = {
+      id: randomUUID(),
+      sku: null,
+      unit: null,
+      unit_cost: 0,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      supplier_id: input.supplier_id ?? null,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: StockPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<Stock>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryStockLevel implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
+  rows: StockLevel[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: visible.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<StockLevel | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: StockLevelInput, user: UserContext): Promise<StockLevel> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input as unknown as { plant: string }, user);
+    const row: StockLevel = {
+      id: randomUUID(),
+      qty_on_hand: 0,
+      reorder_point: 0,
+      reorder_qty: 0,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      stock_item_id: input.stock_item_id,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: StockLevelPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<StockLevel>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryPurchaseOrders implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
+  rows: PurchaseOrder[] = [];
+
+  async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {
+    await tick();
+    const visible =
+      user.role === "owner" ? this.rows : this.rows.filter((r) => r.plant === user.plant);
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: visible.slice(from, from + q.pageSize), total: visible.length };
+  }
+  async get(id: string, user: UserContext): Promise<PurchaseOrder | null> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return null;
+    if (user.role !== "owner" && row.plant !== user.plant) return null;
+    return { ...row };
+  }
+  async create(input: PurchaseOrderInput, user: UserContext): Promise<PurchaseOrder> {
+    const now = new Date().toISOString();
+    const plant = plantForCreate(input as unknown as { plant: string }, user);
+    const row: PurchaseOrder = {
+      id: randomUUID(),
+      status: "draft",
+      total_cost: 0,
+      notes: null,
+      approved_at: null,
+      ordered_at: null,
+      received_at: null,
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...input,
+      supplier_id: input.supplier_id ?? null,
+      plant,
+    };
+    this.rows.push(row);
+    return row;
+  }
+  async update(
+    id: string,
+    patch: PurchaseOrderPatch,
+    expectedVersion: number,
+    user: UserContext,
+  ): Promise<UpdateResult<PurchaseOrder>> {
+    await tick();
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string, user: UserContext): Promise<boolean> {
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return false;
+    if (user.role !== "owner" && row.plant !== user.plant) return false;
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
 export class MemorySupplier implements Repository<Supplier, SupplierInput, SupplierPatch> {
   rows: Supplier[] = [];
   constructor(private readonly history: MemoryHistory) {}
@@ -174,7 +396,6 @@ export class MemorySupplier implements Repository<Supplier, SupplierInput, Suppl
     patch: SupplierPatch,
     expectedVersion: number,
     reason: string,
-    changedBy: string,
   ): Promise<UpdateResult<Supplier>> {
     await tick();
     const row = this.rows.find((r) => r.id === id);
@@ -190,7 +411,7 @@ export class MemorySupplier implements Repository<Supplier, SupplierInput, Suppl
     this.history.append({
       table_name: "suppliers",
       row_id: id,
-      changed_by: changedBy,
+      changed_by: "00000000-0000-0000-0000-000000000000",
       reason,
       plant: null,
       old_values: old,
@@ -246,7 +467,6 @@ export class MemoryClient implements Repository<Client, ClientInput, ClientPatch
     patch: ClientPatch,
     expectedVersion: number,
     reason: string,
-    changedBy: string,
   ): Promise<UpdateResult<Client>> {
     await tick();
     const row = this.rows.find((r) => r.id === id);
@@ -262,7 +482,7 @@ export class MemoryClient implements Repository<Client, ClientInput, ClientPatch
     this.history.append({
       table_name: "clients",
       row_id: id,
-      changed_by: changedBy,
+      changed_by: "00000000-0000-0000-0000-000000000000",
       reason,
       plant: null,
       old_values: old,
@@ -282,6 +502,9 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
+  const stock = new MemoryStock();
+  const stockLevels = new MemoryStockLevel();
+  const purchaseOrders = new MemoryPurchaseOrders();
   const suppliers = new MemorySupplier(history);
   const clients = new MemoryClient(history);
 
@@ -294,11 +517,18 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       return { userId: user.id };
     },
     repositories: (token) => {
-      currentUserId = USERS[token]?.id ?? null;
+      const user = USERS[token];
+      currentUserId = user?.id ?? null;
       return {
-        roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        roles: {
+          forUser: async () => user?.roles ?? [],
+          plantFor: async () => user?.plant ?? null,
+        },
         history,
         mines,
+        stock,
+        stockLevels,
+        purchaseOrders,
         suppliers,
         clients,
         ...overrides,
@@ -322,5 +552,17 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, suppliers, clients, history, logged, call };
+  return {
+    app,
+    registry,
+    mines,
+    stock,
+    stockLevels,
+    purchaseOrders,
+    suppliers,
+    clients,
+    history,
+    logged,
+    call,
+  };
 }
