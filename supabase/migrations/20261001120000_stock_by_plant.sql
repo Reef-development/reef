@@ -1,4 +1,4 @@
-﻿-- T14: separate stock by plant.
+-- T14: separate stock by plant.
 --
 -- This migration is self-contained: it creates the plant columns, installs the
 -- plant-aware policies on stock_items, and locks stock_items.plant and profiles.plant
