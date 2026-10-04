@@ -117,21 +117,16 @@ describe("T7: the history screen shows reason, old value and new value together"
   });
 });
 
-// The older fields in these dialogs already have problems the checker reports (their labels
-// are not tied to their inputs). Those are not T7's, so the check is on the reason box itself:
-// it must add nothing new.
-describe("T7: the reason box adds no accessibility problems", () => {
+describe("T7: the edit dialog with its reason box passes the accessibility checker", () => {
   it("in the edit dialog, before and after its error is shown", async () => {
     const mines = await import("@/routes/_authenticated/mines.tsx");
     const { user } = await renderScreen(mines.Route.options.component);
     await user.click((await screen.findAllByRole("button", { name: "Edit" }))[0]);
     const dialog = await screen.findByRole("dialog");
-    const box = () =>
-      within(dialog).getByRole("textbox", { name: "Reason for this change" }).parentElement!;
-    expect(await accessibilityProblems(box())).toEqual([]);
+    expect(await accessibilityProblems(dialog)).toEqual([]);
 
     fireEvent.click(within(dialog).getByRole("button", { name: /^Save/ }));
     await within(dialog).findByText("A reason is required when changing a record");
-    expect(await accessibilityProblems(box())).toEqual([]);
+    expect(await accessibilityProblems(dialog)).toEqual([]);
   });
 });
