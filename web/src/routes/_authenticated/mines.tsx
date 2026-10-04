@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/mines")({ component: Page 
 function Page() {
   const list = useList<any>("mines", "name", true);
   const clients = useList<any>("clients", "name", true);
-  const upsert = useUpsert("mines");
+  const upsert = useUpsert("mines", { showsConflicts: true });
   const remove = useRemove("mines");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);

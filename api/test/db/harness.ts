@@ -50,14 +50,21 @@ export type Db = PGlite & {
   user(role: "owner" | "manager" | "worker"): Promise<string>;
 };
 
-export async function migratedDb(): Promise<Db> {
+/**
+ * `upTo` stops before the named migration, so a test can put rows in the way a live database
+ * already has them and then apply one migration over the top. Without it every test starts from
+ * an empty database, which is the one case a migration is never actually run against.
+ */
+export async function migratedDb(upTo?: string): Promise<Db> {
   const pg = new PGlite();
   await pg.exec(SUPABASE_STUBS);
   for (const file of readdirSync(MIGRATIONS)
     .filter((f) => f.endsWith(".sql"))
+    .filter((f) => (upTo ? f < upTo : true))
     .sort()) {
     try {
-      await pg.exec(readFileSync(MIGRATIONS + file, "utf8"));
+      // A byte-order mark is invisible in an editor but a syntax error to Postgres.
+      await pg.exec(readFileSync(MIGRATIONS + file, "utf8").replace(/^\uFEFF/, ""));
     } catch (err) {
       throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
     }

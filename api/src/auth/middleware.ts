@@ -1,17 +1,23 @@
 import { createMiddleware } from "hono/factory";
+import { getConnInfo } from "@hono/node-server/conninfo";
 import { can, highestRole, type Permission } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type { AppEnv } from "../app.js";
 
-/** Requires a valid token, then works out the caller's role and plant once for the whole request. */
+/** Requires a valid token, checks the sign-in has not been cut off, then works out the caller's role and plant. */
 export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token) throw new ApiError("UNAUTHENTICATED", "Sign in to continue");
+
+  if (!token) {
+    throw new ApiError("UNAUTHENTICATED", "Sign in to continue");
+  }
 
   let userId: string;
+  let sessionId: string;
+
   try {
-    ({ userId } = await c.var.deps.verifyToken(token));
+    ({ userId, sessionId } = await c.var.deps.verifyToken(token));
   } catch {
     throw new ApiError(
       "UNAUTHENTICATED",
@@ -20,14 +26,34 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   }
 
   const repos = c.var.deps.repositories(token);
+
+  const device = c.req.header("user-agent") ?? null;
+
+  let address: string | null = null;
+
+  try {
+    address = getConnInfo(c).remote.address ?? null;
+  } catch {
+    // Test requests do not always have a real network socket.
+    address = null;
+  }
+
+  const sessionActive = await repos.sessions.touch(sessionId, device, address);
+
+  if (!sessionActive) {
+    throw new ApiError("UNAUTHENTICATED", "This sign-in has been revoked. Sign in again");
+  }
+
   // Both lookups run together: the role from `user_roles`, the plant from `profiles`.
   const [roles, plant] = await Promise.all([
     repos.roles.forUser(userId),
     repos.roles.plantFor(userId),
   ]);
   const role = highestRole(roles);
-  c.set("user", { id: userId, role, plant });
+  c.set("user", { id: userId, role, plant, sessionId });
+
   c.set("repos", repos);
+
   await next();
 });
 
@@ -36,6 +62,7 @@ export function requirePermission(permission: Permission) {
     if (!can(c.var.user.role, permission)) {
       throw new ApiError("FORBIDDEN", "Your role does not allow this");
     }
+
     await next();
   });
 }

@@ -21,6 +21,23 @@ export function highestRole(held: readonly string[]): Role | null {
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+
+  // Daily operations. Everyone captures; changing or deleting a captured entry is for the
+  // people accountable for the site. These mirror the row-level security in the migrations.
+  "production:read": ["owner", "manager", "worker"],
+  "production:create": ["owner", "manager", "worker"],
+  "production:write": ["owner", "manager"],
+  "maintenance:read": ["owner", "manager", "worker"],
+  "maintenance:create": ["owner", "manager", "worker"],
+  "maintenance:write": ["owner", "manager"],
+  "fuel:read": ["owner", "manager", "worker"],
+  "fuel:create": ["owner", "manager", "worker"],
+  "fuel:write": ["owner", "manager"],
+  "fuel:delete": ["owner"],
+  "stock:use": ["owner", "manager", "worker"],
+  "photos:upload": ["owner", "manager", "worker"],
+  "photos:view": ["owner", "manager", "worker"],
+  "sessions:manage": ["owner"],
   "stock:read": ["owner", "manager", "worker"],
   "stock:write": ["owner", "manager"],
   "po:read": ["owner", "manager"],
@@ -29,8 +46,24 @@ export const PERMISSIONS = {
   "history:read": ["owner", "manager"],
   // Who can sign in and with which role. Owner only: a role decides what every screen allows.
   "users:manage": ["owner"],
+  // Money figures. A worker captures the numbers that feed these and does not see what they
+  // add up to, which is the line section 2.2.2 of the brief draws.
+  "analytics:read": ["owner", "manager"],
+  // Comparing sites against each other is the owner's alone: a manager seeing the ranking
+  // learns how another manager's site is doing, which is not theirs to know. REEF has since
+  // given the same reason for keeping plants apart.
+  "analytics:compare": ["owner"],
+  "reports:read": ["owner", "manager"],
+  // What is due for removal under the retention rules REEF gave. The owner's alone: it is a
+  // list of people who have left, and who has left a site is not a site manager's business.
+  "retention:read": ["owner"],
+  // Your own notifications, whatever your role. The database policy underneath limits it to
+  // your own rows, so this permission is about reaching the endpoint at all.
+  "notifications:read": ["owner", "manager", "worker"],
+  // Whether the scheduled sweep has been running. The owner's, because a day with no run is a
+  // question about whether the system is working rather than about one site.
+  "jobs:read": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
-
 export type Permission = keyof typeof PERMISSIONS;
 
 export function can(role: Role | null, permission: Permission): boolean {
