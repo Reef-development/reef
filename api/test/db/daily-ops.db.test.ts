@@ -12,7 +12,11 @@ beforeAll(async () => {
   worker = await db.user("worker");
   manager = await db.user("manager");
   // T14: stock belongs to a plant, and people use stock at their own plant.
-  await db.query("UPDATE profiles SET plant = 'Kriel' WHERE id = ANY($1)", [[worker, manager]]);
+  // Only the service role may set someone's plant (T14), so do it as an admin would.
+  await db.transaction(async (tx) => {
+    await tx.query("SELECT set_config('request.jwt.claim.role', 'service_role', true)");
+    await tx.query("UPDATE profiles SET plant = 'Kriel' WHERE id = ANY($1)", [[worker, manager]]);
+  });
   const eq = await db.query<{ id: string }>(
     "INSERT INTO equipment (name) VALUES ('Screen 3') RETURNING id",
   );

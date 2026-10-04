@@ -29,10 +29,6 @@ const SUPABASE_STUBS = `
   CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS
     $$ SELECT coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'authenticated') $$;
 
-  -- T14's policies read the caller's database role (authenticated, service_role, ...).
-  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS
-    $$ SELECT nullif(current_setting('request.jwt.claim.role', true), '') $$;
-
   CREATE SCHEMA storage;
   CREATE TABLE storage.objects (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
