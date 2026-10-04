@@ -1,5 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useList, ZAR, NUM, RPT } from "@/lib/reef-db";
+import { useStockOnHand } from "@/hooks/useStock";
 import { costPerTon } from "@reef/shared";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const production = useList<any>("production_logs", "date");
   const maint = useList<any>("maintenance_logs", "date");
-  const stock = useList<any>("stock_items");
+  const stock = useStockOnHand();
   const pos = useList<any>("purchase_orders");
   const staticCosts = useList<any>("static_costs", "month");
   const mines = useList<any>("mines");

@@ -51,8 +51,17 @@ describe("T20: a capture form completed with the keyboard alone", () => {
     await waitFor(() =>
       expect(screen.getByRole("combobox", { name: "Mine" }).textContent).toMatch(/Pit/),
     );
+    // The list hands focus back to its button once it has closed; let that happen before moving
+    // on, or it can take the focus back from the tons field mid-typing.
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Mine" })),
+    );
 
     await user.tab();
+    // The closed list can still move focus a moment later; give it that moment, then check the
+    // tons field still has it before typing.
+    await new Promise((r) => setTimeout(r, 150));
     expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: "Tons produced" }));
     await user.keyboard("240");
     // Under a busy test run the screen can lag the keys; wait until it shows all three digits.

@@ -31,6 +31,20 @@ const API_ROWS: Record<string, unknown[]> = {
   "/api/v1/mines": [MINE],
   "/api/v1/production-logs": [PRODUCTION],
   "/api/v1/fuel-slips": [FUEL],
+  // Since T14A the inventory screen reads stock and its plant levels through the API.
+  "/api/v1/stock": [
+    { id: "s1", name: "Bearing 6205", plant: "Kriel", unit: "unit", unit_cost: 150, version: 1 },
+  ],
+  "/api/v1/stock-levels": [
+    {
+      id: "l1",
+      stock_item_id: "s1",
+      plant: "Kriel",
+      qty_on_hand: 10,
+      reorder_point: 2,
+      version: 1,
+    },
+  ],
 };
 const SUPABASE_ROWS: Record<string, unknown[]> = {
   clients: [{ id: "c1", name: "Seriti", active: true }],

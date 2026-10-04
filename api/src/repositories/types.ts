@@ -136,11 +136,13 @@ export interface ScopedRepository<Row, Input, Patch> {
   list(query: ListQuery, user: UserContext): Promise<Page<Row>>;
   get(id: string, user: UserContext): Promise<Row | null>;
   create(input: Input, user: UserContext): Promise<Row>;
+  /** As Repository.update, after checking the caller can see the record. */
   update(
     id: string,
     patch: Patch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<Row>>;
   remove(id: string, user: UserContext): Promise<boolean>;
 }
