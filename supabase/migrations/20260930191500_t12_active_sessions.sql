@@ -30,12 +30,7 @@ ON public.user_sessions
 FOR SELECT
 TO authenticated
 USING (
-  EXISTS (
-    SELECT 1
-    FROM public.user_roles
-    WHERE user_id = auth.uid()
-      AND role = 'owner'
-  )
+  user_id = auth.uid()
 );
 
 CREATE POLICY "Owners can view all sessions"
