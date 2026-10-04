@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -12,9 +13,14 @@ import tsconfigPaths from "vite-tsconfig-paths";
  * The include pattern covers two sets of tests:
  *   src/**\/*.test.tsx   screen behaviour tests (T19)
  *   test/**\/*.test.ts   pure-logic tests (T9's number check)
+ *   test/**\/*.test.tsx  screen tests that render whole pages (T18, T20)
  */
 export default defineConfig({
   plugins: [react(), tsconfigPaths()],
+  // tsconfigPaths only maps @/ for files tsconfig includes, and test/ is outside it.
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
   test: {
     environment: "jsdom",
     globals: true,
