@@ -8,6 +8,15 @@ import type {
   MinePatch,
   ProductionInput,
   ProductionPatch,
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch,
+  Stock,
+  StockInput,
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch,
+  StockPatch,
 } from "@reef/shared";
 import type {
   HistoryRepository,
@@ -16,6 +25,7 @@ import type {
   Repository,
   RoleRepository,
   Row,
+  ScopedRepository,
   StockUsageRepository,
 } from "./types.js";
 
@@ -30,4 +40,7 @@ export type Repositories = {
   maintenanceParts: MaintenancePartsRepository;
   stockUsage: StockUsageRepository;
   photos: PhotoStore;
+  stock: ScopedRepository<Stock, StockInput, StockPatch>;
+  stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;
+  purchaseOrders: ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>;
 };

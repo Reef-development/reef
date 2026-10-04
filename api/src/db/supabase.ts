@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
+import { SupabasePurchaseOrderRepository } from "../repositories/purchase-orders.js";
+import { SupabaseStockLevelRepository } from "../repositories/stock-levels.js";
+import { SupabaseStockRepository } from "../repositories/stock.js";
 import {
   SupabaseMaintenanceParts,
   SupabaseMaintenanceRepository,
@@ -32,6 +35,9 @@ export function supabaseRepositories(config: Config) {
       maintenanceParts: new SupabaseMaintenanceParts(db),
       stockUsage: new SupabaseStockUsage(db),
       photos: new SupabasePhotoStore(db),
+      stock: new SupabaseStockRepository(db),
+      stockLevels: new SupabaseStockLevelRepository(db),
+      purchaseOrders: new SupabasePurchaseOrderRepository(db),
     };
   };
 }

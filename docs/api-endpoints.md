@@ -2,12 +2,12 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-29 endpoints, 29 explained.
+44 endpoints, 44 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
 | GET | `/health` | Anyone | Reports that the API process is up. The deploy polls it to know when to stop waiting. | - |
-| GET | `/api/v1/me` | Any signed-in user | Returns the signed-in user's id and role, so the web app can choose which screens to show. | A missing, expired or foreign token. |
+| GET | `/api/v1/me` | Any signed-in user | Returns the signed-in user's id, role and plant, so the web app can choose which screens to show. | A missing, expired or foreign token. |
 | GET | `/api/v1/history` | owner, manager | Lists changes to records, newest first, each with who made it, why, and the old and new values. Filter by table and record to show one record's history. | Workers, because history can show pay and personal details. A manager is not refused but sees only changes at their own plant. Also refuses a malformed record id or a page size above 200. |
 | GET | `/api/v1/mines` | owner, manager, worker | Lists the sites REEF operates, paged and sorted. Every role reads it to pick a site on capture forms. | An unknown sort column or a page size above 200. |
 | GET | `/api/v1/mines/:id` | owner, manager, worker | Returns one site. | An id that is not a UUID, or a record that does not exist. |
@@ -35,3 +35,18 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | POST | `/api/v1/stock-usage` | owner, manager, worker | Records stock used on the plant. The quantity comes off in one database step, so two people recording at once both count, and a reorder is drafted if the item falls to its reorder point. | A zero or negative quantity, or a stock item that does not exist. |
 | POST | `/api/v1/photos/upload-url` | owner, manager, worker | Issues a one-time link for uploading a repair, fuel or downtime photo. The API chooses the file name, under the caller's own folder, so nobody can overwrite another person's photo. | Anything other than a JPEG, PNG or WebP image, or an unknown folder. |
 | GET | `/api/v1/photos/view` | owner, manager, worker | Returns a link to view a stored photo for one hour. | A path this system did not issue, or a photo the caller may not see: workers see their own, managers and owners see all. |
+| GET | `/api/v1/stock` | owner, manager, worker | Lists stock items for the caller's plant. An owner sees every plant; everyone else sees only their own. | An unknown sort column or a page size above 200. |
+| GET | `/api/v1/stock/:id` | owner, manager, worker | Returns one stock item, or 404 if it belongs to another plant. | An id that is not a UUID, or a record that does not exist. |
+| POST | `/api/v1/stock` | owner, manager | Adds a stock item. The plant is taken from the caller, except for an owner, who may set it. | Missing or invalid fields, and any field it does not recognise. |
+| PATCH | `/api/v1/stock/:id` | owner, manager | Changes a stock item's details or its levels. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
+| DELETE | `/api/v1/stock/:id` | owner, manager | Deletes a stock item. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
+| GET | `/api/v1/stock-levels` | owner, manager, worker | Lists stock levels for the caller's plant. An owner sees every plant; everyone else sees only their own. | An unknown sort column or a page size above 200. |
+| GET | `/api/v1/stock-levels/:id` | owner, manager, worker | Returns one stock level, or 404 if it belongs to another plant. | An id that is not a UUID, or a record that does not exist. |
+| POST | `/api/v1/stock-levels` | owner, manager | Adds a stock level for a part at a plant. The plant is taken from the caller, except for an owner, who may set it. | Missing or invalid fields, and any field it does not recognise. |
+| PATCH | `/api/v1/stock-levels/:id` | owner, manager | Changes a stock level's quantity or its reorder thresholds. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
+| DELETE | `/api/v1/stock-levels/:id` | owner, manager | Deletes a stock level. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
+| GET | `/api/v1/purchase-orders` | owner, manager | Lists purchase orders for the caller's plant. Only owners and managers can call this — employees cannot see purchase orders. An owner sees every plant. | An unknown sort column or a page size above 200. |
+| GET | `/api/v1/purchase-orders/:id` | owner, manager | Returns one purchase order, or 404 if it belongs to another plant. | An id that is not a UUID, or a record that does not exist. |
+| POST | `/api/v1/purchase-orders` | owner, manager | Raises a purchase order. Only owners and managers can call this. The plant is taken from the caller, except for an owner, who may raise one for any plant. | Missing or invalid fields, and any field it does not recognise. |
+| PATCH | `/api/v1/purchase-orders/:id` | owner, manager | Changes a purchase order's details or its status. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
+| DELETE | `/api/v1/purchase-orders/:id` | owner, manager | Deletes a purchase order. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
