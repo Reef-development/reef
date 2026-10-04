@@ -1,4 +1,4 @@
-﻿-- T14 (part 2): purchase orders carry a plant, and reorder levels become per-plant.
+-- T14 (part 2): purchase orders carry a plant, and reorder levels become per-plant.
 --
 -- REEF confirmed two things in writing:
 --   1. Each plant's stock is managed separately. A part can be out at one plant while another
@@ -33,7 +33,7 @@ WHERE plant IS NOT NULL
 ON CONFLICT (stock_item_id, plant) DO NOTHING;
 
 -- The quantity columns stay on stock_items for now. The prototype's screens under src/ read
--- them, and REEF uses the prototype — the API is not deployed until T25. Migrating those
+-- them, and REEF uses the prototype - the API is not deployed until T25. Migrating those
 -- screens to stock_levels is Tayler's T14A; a follow-up migration drops the columns once
 -- T14A lands. Until then both schemas exist: stock_items keeps the old columns for the
 -- prototype, stock_levels is the source of truth for the API.

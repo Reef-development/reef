@@ -1,4 +1,4 @@
-﻿-- T14: separate stock by plant.
+-- T14: separate stock by plant.
 --
 -- This migration is self-contained: it creates the plant columns, installs the
 -- plant-aware policies on stock_items, and locks stock_items.plant and profiles.plant
@@ -19,7 +19,7 @@ alter table public.stock_items
 alter table public.profiles
   add column if not exists plant text;
 
--- stock_items.plant is required — every item belongs to exactly one plant.
+-- stock_items.plant is required - every item belongs to exactly one plant.
 -- profiles.plant stays nullable: the owner has no plant and sees every plant. The RLS
 -- policies test for the owner role explicitly, not for a null plant.
 alter table public.stock_items alter column plant set not null;

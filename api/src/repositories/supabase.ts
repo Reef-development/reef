@@ -122,7 +122,6 @@ export class SupabaseRoleRepository implements RoleRepository {
     return (data as { plant: string | null } | null)?.plant ?? null;
   }
 }
-<<<<<<< HEAD
 
 /** Reads the history table. Row-level security decides which rows the caller sees. */
 export class SupabaseHistoryRepository implements HistoryRepository {
@@ -140,5 +139,3 @@ export class SupabaseHistoryRepository implements HistoryRepository {
     return { rows: (data ?? []) as HistoryEntry[], total: count ?? 0 };
   }
 }
-=======
->>>>>>> f7e1ac2 (T14: format api, shared and tests to prettier rules)

@@ -24,6 +24,10 @@ const SUPABASE_STUBS = `
   -- Supabase reads the signed-in user from the request's JWT; here it comes from a setting.
   CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS
     $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+  -- Supabase reads the caller's role from the JWT too. The migrations check it to skip the
+  -- plant-protection triggers when the change is made by the service role.
+  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS
+    $$ SELECT coalesce(nullif(current_setting('request.jwt.claim.role', true), ''), 'authenticated') $$;
 
   CREATE SCHEMA storage;
   CREATE TABLE storage.objects (
@@ -36,6 +40,7 @@ const SUPABASE_STUBS = `
 
   GRANT USAGE ON SCHEMA public, auth, storage TO anon, authenticated, service_role;
   GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION auth.role() TO anon, authenticated, service_role;
 `;
 
 export type Db = PGlite & {
