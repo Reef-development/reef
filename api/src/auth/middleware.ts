@@ -4,8 +4,7 @@ import { can, highestRole, type Permission } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type { AppEnv } from "../app.js";
 
-/** Requires a valid token, checks the session, then works out the caller's role. */
-/** Requires a valid token, then works out the caller's role and plant once for the whole request. */
+/** Requires a valid token, checks the sign-in has not been cut off, then works out the caller's role and plant. */
 export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -45,21 +44,14 @@ export const requireUser = createMiddleware<AppEnv>(async (c, next) => {
     throw new ApiError("UNAUTHENTICATED", "This sign-in has been revoked. Sign in again");
   }
 
-  const role = highestRole(await repos.roles.forUser(userId));
-
-  c.set("user", {
-    id: userId,
-    role,
-    sessionId,
-  });
-
   // Both lookups run together: the role from `user_roles`, the plant from `profiles`.
   const [roles, plant] = await Promise.all([
     repos.roles.forUser(userId),
     repos.roles.plantFor(userId),
   ]);
   const role = highestRole(roles);
-  c.set("user", { id: userId, role, plant });
+  c.set("user", { id: userId, role, plant, sessionId });
+
   c.set("repos", repos);
 
   await next();

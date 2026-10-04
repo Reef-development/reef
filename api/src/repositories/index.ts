@@ -1,5 +1,3 @@
-import type { Mine, MineInput, MinePatch } from "@reef/shared";
-import type { HistoryRepository, Repository, RoleRepository, SessionRepository } from "./types.js";
 import type {
   Mine,
   MineInput,
@@ -14,7 +12,13 @@ import type {
   StockLevelPatch,
   StockPatch,
 } from "@reef/shared";
-import type { HistoryRepository, Repository, RoleRepository, ScopedRepository } from "./types.js";
+import type {
+  HistoryRepository,
+  Repository,
+  RoleRepository,
+  ScopedRepository,
+  SessionRepository,
+} from "./types.js";
 
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {

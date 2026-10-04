@@ -1,6 +1,5 @@
 import type { Hono } from "hono";
 import { z } from "zod";
-import { HistoryQuery, MINE_SORTABLE, MineInput, MinePatch } from "@reef/shared";
 import {
   HistoryQuery,
   MINE_SORTABLE,
@@ -21,12 +20,11 @@ import { parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
 import { defineRoute } from "./define.js";
-import { resourceRoutes } from "./resource.js";
+import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 import { ApiError } from "../http/errors.js";
 
 const UserId = z.string().uuid();
 const SessionId = z.string().uuid();
-import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 
 export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   defineRoute(
@@ -57,6 +55,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       ok(c, {
         id: c.var.user.id,
         role: c.var.user.role,
+        plant: c.var.user.plant,
       }),
   );
 

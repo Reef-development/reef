@@ -23,50 +23,48 @@ import type {
   HistoryRepository,
   Page,
   Repository,
+  ScopedRepository,
   SessionRepository,
   UpdateResult,
-  UserSession,
-  ScopedRepository,
-  UpdateResult,
   UserContext,
+  UserSession,
 } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
-/** Token → user, session and roles, standing in for Supabase Auth and `user_roles`. */
-export const USERS: Record<string, { id: string; sessionId: string; roles: string[] }> = {
+/** Token → user, their session, roles and plant (null for the owner, who sees every plant). */
+export const USERS: Record<
+  string,
+  { id: string; sessionId: string; roles: string[]; plant: string | null }
+> = {
   "owner-token": {
     id: "00000000-0000-4000-8000-000000000001",
     sessionId: "10000000-0000-4000-8000-000000000001",
     roles: ["owner"],
+    plant: null,
   },
   "manager-token": {
     id: "00000000-0000-4000-8000-000000000002",
     sessionId: "10000000-0000-4000-8000-000000000002",
     roles: ["manager"],
+    plant: "A",
   },
   "worker-token": {
     id: "00000000-0000-4000-8000-000000000003",
     sessionId: "10000000-0000-4000-8000-000000000003",
     roles: ["worker"],
+    plant: "A",
   },
-  "legacy-token": {
-    id: "00000000-0000-4000-8000-000000000004",
-    sessionId: "10000000-0000-4000-8000-000000000004",
-    roles: ["stock_controller"],
-/** Token → user, their roles, and their plant (null for the owner, who sees every plant). */
-export const USERS: Record<string, { id: string; roles: string[]; plant: string | null }> = {
-  "owner-token": { id: "00000000-0000-4000-8000-000000000001", roles: ["owner"], plant: null },
-  "manager-token": { id: "00000000-0000-4000-8000-000000000002", roles: ["manager"], plant: "A" },
-  "worker-token": { id: "00000000-0000-4000-8000-000000000003", roles: ["worker"], plant: "A" },
   "no-plant-token": {
     id: "00000000-0000-4000-8000-000000000005",
+    sessionId: "10000000-0000-4000-8000-000000000005",
     roles: ["manager"],
     plant: null,
   },
   "legacy-token": {
     id: "00000000-0000-4000-8000-000000000004",
+    sessionId: "10000000-0000-4000-8000-000000000004",
     roles: ["stock_controller"],
     plant: "A",
   },
@@ -276,6 +274,9 @@ class MemorySessions implements SessionRepository {
     }
 
     return count;
+  }
+}
+
 export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
   rows: Stock[] = [];
 
@@ -513,12 +514,11 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       const user = USERS[token];
       currentUserId = user?.id ?? null;
       return {
-        roles: { forUser: async () => user?.roles ?? [] },
-        sessions: new MemorySessions(user?.id ?? "", sessionRows),
         roles: {
-          forUser: async () => USERS[token]?.roles ?? [],
-          plantFor: async () => USERS[token]?.plant ?? null,
+          forUser: async () => user?.roles ?? [],
+          plantFor: async () => user?.plant ?? null,
         },
+        sessions: new MemorySessions(user?.id ?? "", sessionRows),
         history,
         mines,
         stock,
@@ -553,6 +553,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, history, sessionRows, logged, call };
-  return { app, registry, mines, stock, stockLevels, purchaseOrders, history, logged, call };
+  return {
+    app,
+    registry,
+    mines,
+    stock,
+    stockLevels,
+    purchaseOrders,
+    history,
+    sessionRows,
+    logged,
+    call,
+  };
 }
