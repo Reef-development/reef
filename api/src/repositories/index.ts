@@ -26,6 +26,7 @@ import type {
   NotificationRepository,
   PhotoStore,
   Repository,
+  ReportRunRepository,
   RetentionRepository,
   RoleRepository,
   Row,
@@ -54,6 +55,7 @@ export type Repositories = {
   stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;
   purchaseOrders: ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>;
   analytics: AnalyticsRepository;
+  reportRuns: ReportRunRepository;
   retention: RetentionRepository;
   notifications: NotificationRepository;
   jobs: JobRepository;

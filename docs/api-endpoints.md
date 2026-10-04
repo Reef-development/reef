@@ -2,7 +2,7 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-68 endpoints, 68 explained.
+69 endpoints, 69 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
@@ -63,6 +63,7 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | POST | `/api/v1/purchase-orders` | owner, manager | Raises a purchase order. Only owners and managers can call this. The plant is taken from the caller, except for an owner, who may raise one for any plant. | Missing or invalid fields, and any field it does not recognise. |
 | PATCH | `/api/v1/purchase-orders/:id` | owner, manager | Changes a purchase order's details or its status. Refuses a save from an out-of-date copy. | Invalid or unrecognised fields, a missing version, or a version older than the stored one. The last means someone else saved first: it answers 409 with their copy, so nobody overwrites a change they never saw. |
 | DELETE | `/api/v1/purchase-orders/:id` | owner, manager | Deletes a purchase order. Refuses if the caller cannot see it. | A record that does not exist, or one that other records still point to. |
+| GET | `/api/v1/reports/runs` | owner, manager | The month-end reports that have been produced, newest first, each saying whether it is out of date: an entry dated in its month was added, changed or removed after it was made, so the figures in it are no longer the figures in the system. | Workers, who do not see reports. Also a site id that is not an id. A report of a month still running is never marked: it is expected to change. |
 | GET | `/api/v1/analytics/cost-per-ton` | owner, manager | Cost per ton for one site over a period, with fixed and variable costs kept apart so a rise can be attributed rather than only noticed. | A period without both dates, or one that runs backwards. A site the caller may not see answers 404 rather than 403, because 403 would confirm it exists. A period with no production returns null rather than 0: a site that produced nothing is not the cheapest site. |
 | GET | `/api/v1/analytics/comparison` | owner | Every site the caller may see, ranked by cost per ton, cheapest first. The owner's view of which plant is running expensively. | A manager, who sees their own sites' figures but not the ranking: that would tell them how another manager's site is doing. Sites with no production sort last, not first, because they have no cost per ton at all. |
 | GET | `/api/v1/analytics/production-trend` | owner, manager | Tons produced per day for one site, which is the series behind the production chart. | The same period and site rules as cost per ton. A day with no shift recorded is absent from the series rather than present as a zero, because zero means nothing was produced and absent means nobody captured anything. |

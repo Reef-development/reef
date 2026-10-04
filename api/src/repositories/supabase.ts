@@ -18,6 +18,7 @@ import type {
   Period,
   ProductionTotals,
   Repository,
+  ReportRunRepository,
   RetentionRepository,
   RoleRepository,
   Row,
@@ -746,5 +747,64 @@ export class SupabaseSettings implements SettingsRepository {
       .maybeSingle();
     if (error) throw translate(error);
     return (data as Setting) ?? null;
+  }
+}
+
+type RunRow = {
+  mine_id: string;
+  month: string;
+  generated_at: string;
+  month_complete: boolean;
+  stale_since: string | null;
+  stale_reason: string | null;
+};
+
+/** report_runs (T10): which month-end reports were produced, and which have gone out of date. */
+export class SupabaseReportRunRepository implements ReportRunRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async record(mineId: string, month: string) {
+    const { data, error } = await this.db.rpc("record_report_run", {
+      _mine: mineId,
+      _month: `${month}-01`,
+    });
+    if (error) throw translate(error);
+    const r = (
+      (data ?? []) as {
+        previous_generated_at: string | null;
+        previous_stale_since: string | null;
+        previous_stale_reason: string | null;
+        generated_at: string;
+        month_complete: boolean;
+      }[]
+    )[0];
+    return {
+      generated_at: r.generated_at,
+      month_complete: r.month_complete,
+      previous: r.previous_generated_at
+        ? {
+            generated_at: r.previous_generated_at,
+            out_of_date_since: r.previous_stale_since,
+            out_of_date_reason: r.previous_stale_reason,
+          }
+        : null,
+    };
+  }
+
+  async list(mineId?: string) {
+    let query = this.db
+      .from("report_runs")
+      .select("mine_id, month, generated_at, month_complete, stale_since, stale_reason");
+    if (mineId) query = query.eq("mine_id", mineId);
+    const { data, error } = await query.order("month", { ascending: false });
+    if (error) throw translate(error);
+    return ((data ?? []) as RunRow[]).map((r) => ({
+      mine_id: r.mine_id,
+      month: r.month.slice(0, 7),
+      generated_at: r.generated_at,
+      month_complete: r.month_complete,
+      out_of_date_since: r.stale_since,
+      out_of_date_reason: r.stale_reason,
+    }));
   }
 }

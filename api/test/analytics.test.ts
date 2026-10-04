@@ -150,3 +150,63 @@ describe("the monthly report", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("report runs (T10)", () => {
+  const monthly = (app: ReturnType<typeof testApp>) =>
+    app.call("GET", `/api/v1/reports/monthly?month=2026-08&mine_id=${ALPHA}`, {
+      token: "manager-token",
+    });
+
+  it("records the run each time the monthly report is produced", async () => {
+    const app = testApp();
+    seed(app);
+    const first = (await (await monthly(app)).json()).data;
+    expect(first.run.previous).toBeNull();
+    expect(first.run.generated_at).toEqual(expect.any(String));
+
+    const second = (await (await monthly(app)).json()).data;
+    expect(second.run.previous).toEqual({
+      generated_at: first.run.generated_at,
+      out_of_date_since: null,
+      out_of_date_reason: null,
+    });
+  });
+
+  it("lists produced reports and shows one that a late entry put out of date", async () => {
+    const app = testApp();
+    seed(app);
+    await monthly(app);
+    app.reportRuns.markOutOfDate(
+      ALPHA,
+      "2026-08",
+      "A production entry dated 20 Aug 2026 was added after this report was made.",
+    );
+    const res = await app.call("GET", `/api/v1/reports/runs?mine_id=${ALPHA}`, {
+      token: "manager-token",
+    });
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data).toHaveLength(1);
+    expect(data[0].month).toBe("2026-08");
+    expect(data[0].out_of_date_since).toEqual(expect.any(String));
+    expect(data[0].out_of_date_reason).toContain("added after this report was made");
+
+    // Producing it again tells the caller what had gone out of date, and it is current again.
+    const again = (await (await monthly(app)).json()).data;
+    expect(again.run.previous.out_of_date_reason).toContain("20 Aug 2026");
+    const after = (
+      await (await app.call("GET", "/api/v1/reports/runs", { token: "manager-token" })).json()
+    ).data;
+    expect(after[0].out_of_date_since).toBeNull();
+  });
+
+  it("refuses a worker, and a site id that is not an id", async () => {
+    const app = testApp();
+    const worker = await app.call("GET", "/api/v1/reports/runs", { token: "worker-token" });
+    expect(worker.status).toBe(403);
+    const bad = await app.call("GET", "/api/v1/reports/runs?mine_id=nope", {
+      token: "manager-token",
+    });
+    expect(bad.status).toBe(400);
+  });
+});
