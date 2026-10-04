@@ -2,12 +2,14 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import {
   HistoryQuery,
+  Id,
   MINE_SORTABLE,
   MineInput,
   MinePatch,
   PURCHASE_ORDER_SORTABLE,
   PurchaseOrderInput,
   PurchaseOrderPatch,
+  RoleChange,
   STOCK_LEVEL_SORTABLE,
   STOCK_SORTABLE,
   StockInput,
@@ -16,8 +18,9 @@ import {
   StockPatch,
 } from "@reef/shared";
 import type { AppEnv } from "../app.js";
-import { parseWith } from "../http/body.js";
+import { parseBody, parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
+import { ApiError } from "../http/errors.js";
 import type { Registry } from "../registry.js";
 import { dailyOpsRoutes } from "./daily-ops.js";
 import { adminRoutes } from "./admin.js";
@@ -26,7 +29,6 @@ import { defineRoute } from "./define.js";
 import { notificationRoutes } from "./notifications.js";
 import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 import { settingsRoutes } from "./settings.js";
-import { ApiError } from "../http/errors.js";
 
 const UserId = z.string().uuid();
 const SessionId = z.string().uuid();
@@ -175,6 +177,43 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
       const q = parseWith(HistoryQuery, c.req.query());
       const { rows, total } = await c.var.repos.history.list(q);
       return ok(c, rows, 200, { page: q.page, pageSize: q.pageSize, total });
+    },
+  );
+
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "GET",
+      path: "/api/v1/users",
+      access: "users:manage",
+      summary:
+        "Lists everyone who can sign in, with their role and plant, so the owner can see who has access and change it.",
+      refuses:
+        "Anyone but the owner, because the list shows every person's email and role. The database refuses it too.",
+    },
+    async (c) => ok(c, await c.var.repos.users.list()),
+  );
+
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "PATCH",
+      path: "/api/v1/users/:id/role",
+      access: "users:manage",
+      summary:
+        "Changes one person's role to owner, manager or worker, and records why in the history.",
+      refuses:
+        "Anyone but the owner; a role that is not one of the three; a missing reason; an account that " +
+        "does not exist; and a change that would leave nobody as owner, because then nobody could manage roles again.",
+    },
+    async (c) => {
+      const id = parseWith(Id, c.req.param("id"));
+      const { role, reason } = await parseBody(c, RoleChange);
+      const user = await c.var.repos.users.setRole(id, role, reason);
+      if (!user) throw new ApiError("NOT_FOUND", "That account does not exist");
+      return ok(c, user);
     },
   );
 

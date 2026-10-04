@@ -2,7 +2,7 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-59 endpoints, 59 explained.
+61 endpoints, 61 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
@@ -13,6 +13,8 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | DELETE | `/api/v1/sessions/:sessionId` | owner | Lets an owner cut off one active sign-in. | A session id that is not a UUID, a session that does not exist or is already revoked, or a caller who is not an owner. |
 | DELETE | `/api/v1/users/:userId/sessions` | owner | Lets an owner cut off all active sign-ins belonging to one user. | A user id that is not a UUID, or a caller who is not an owner. |
 | GET | `/api/v1/history` | owner, manager | Lists changes to records, newest first, each with who made it, why, and the old and new values. Filter by table and record to show one record's history. | Workers, because history can show pay and personal details. A manager is not refused but sees only changes at their own plant. Also refuses a malformed record id or a page size above 200. |
+| GET | `/api/v1/users` | owner | Lists everyone who can sign in, with their role and plant, so the owner can see who has access and change it. | Anyone but the owner, because the list shows every person's email and role. The database refuses it too. |
+| PATCH | `/api/v1/users/:id/role` | owner | Changes one person's role to owner, manager or worker, and records why in the history. | Anyone but the owner; a role that is not one of the three; a missing reason; an account that does not exist; and a change that would leave nobody as owner, because then nobody could manage roles again. |
 | GET | `/api/v1/mines` | owner, manager, worker | Lists the sites REEF operates, paged and sorted. Every role reads it to pick a site on capture forms. | An unknown sort column or a page size above 200. |
 | GET | `/api/v1/mines/:id` | owner, manager, worker | Returns one site. | An id that is not a UUID, or a record that does not exist. |
 | POST | `/api/v1/mines` | owner, manager | Adds a site. Owners and managers only, because a site carries the cost-per-ton target. | Missing or invalid fields, and any field it does not recognise. |

@@ -9,6 +9,7 @@ import type {
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderPatch,
+  Role,
   Stock,
   StockInput,
   StockLevel,
@@ -16,6 +17,7 @@ import type {
   StockLevelPatch,
   StockPatch,
   Notification,
+  UserSummary,
 } from "@reef/shared";
 import type { Machine } from "../src/services/service-due.js";
 import { createApp } from "../src/app.js";
@@ -45,6 +47,7 @@ import type {
   StockUsageRepository,
   UpdateResult,
   UserContext,
+  UserRepository,
   UserSession,
 } from "../src/repositories/types.js";
 
@@ -312,6 +315,56 @@ class MemorySessions implements SessionRepository {
     }
 
     return count;
+  }
+}
+
+/**
+ * The stand-in for list_users and set_user_role: the three real roles, a reason, never leaving
+ * the platform without an owner, and the change written to the history.
+ */
+export class MemoryUsers implements UserRepository {
+  rows: UserSummary[] = Object.entries(USERS).map(([token, u]) => ({
+    id: u.id,
+    full_name: token.replace("-token", ""),
+    email: `${token.replace("-token", "")}@reef.test`,
+    role: (["owner", "manager", "worker"].find((r) => u.roles.includes(r)) ?? null) as Role | null,
+    plant: u.plant,
+    created_at: "2026-09-01T00:00:00Z",
+  }));
+
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly actor: () => string | null,
+  ) {}
+
+  async list() {
+    return this.rows.map((r) => ({ ...r }));
+  }
+
+  async setRole(userId: string, role: Role, reason: string) {
+    const row = this.rows.find((r) => r.id === userId);
+    if (!row) return null;
+    const owners = this.rows.filter((r) => r.role === "owner").length;
+    if (row.role === "owner" && role !== "owner" && owners <= 1) {
+      throw new ApiError(
+        "CONFLICT",
+        "There must always be at least one owner. Make someone else an owner first.",
+      );
+    }
+    if (row.role !== role) {
+      this.history.append({
+        table_name: "user_roles",
+        row_id: userId,
+        changed_by: this.actor() ?? "00000000-0000-0000-0000-000000000000",
+        reason,
+        plant: null,
+        old_values: { role: row.role },
+        new_values: { role },
+        version: this.history.rows.filter((h) => h.row_id === userId).length + 1,
+      });
+      row.role = role;
+    }
+    return { ...row };
   }
 }
 
@@ -795,7 +848,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   const retention = new MemoryRetention();
   const notifications = new MemoryNotifications();
   const jobs = new MemoryJobs();
-
+  const users = new MemoryUsers(history, actor);
   const maintenanceParts: MaintenancePartsRepository = {
     forLog: async (logId) => maintenance.parts.filter((p) => p.maintenance_id === logId),
     add: async (logId, part) => maintenance.addPart(logId, part),
@@ -873,6 +926,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
         settings,
         history,
+        users,
         mines,
         production,
         fuel,
@@ -920,6 +974,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     app,
     registry,
     history,
+    users,
     mines,
     production,
     fuel,

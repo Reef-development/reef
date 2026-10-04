@@ -1,4 +1,11 @@
-import type { HistoryQuery, JobRun, ListQuery, Notification } from "@reef/shared";
+import type {
+  HistoryQuery,
+  JobRun,
+  ListQuery,
+  Notification,
+  Role,
+  UserSummary,
+} from "@reef/shared";
 import type { Machine } from "../services/service-due.js";
 
 export type { HistoryQuery };
@@ -117,6 +124,13 @@ export type HistoryEntry = {
 export interface HistoryRepository {
   /** Changes newest first, optionally for one table or one record. */
   list(query: HistoryQuery): Promise<Page<HistoryEntry>>;
+}
+
+export interface UserRepository {
+  /** Everyone who can sign in. Refused in the database unless the caller is an owner. */
+  list(): Promise<UserSummary[]>;
+  /** Sets one person's role and records why. Null if there is no such account. */
+  setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null>;
 }
 
 /** Who is asking. `plant` is null for the owner, who sees every plant. */
