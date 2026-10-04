@@ -1,36 +1,39 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useList, NUM } from "@/lib/reef-db";
+import { api } from "@/lib/api";
+import { NUM } from "@/lib/reef-db";
+import { STOCK_KEY, useStockOnHand } from "@/hooks/useStock";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/NumberField";
 import { Label } from "@/components/ui/label";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/worker/log-usage")({ component: Page });
 
 function Page() {
-  const stock = useList<any>("stock_items", "name", true);
+  // Only the items at this person's plant: the API returns no others.
+  const stock = useStockOnHand();
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState<number>(1);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  const once = useOneAtATime();
   const submit = useMutation({
     mutationFn: async () => {
       if (!itemId) throw new Error("Select an item");
       if (qty <= 0) throw new Error("Enter a quantity");
-      const item = stock.data?.find((s: any) => s.id === itemId);
-      if (!item) throw new Error("Item not found");
-      const newQty = Number(item.qty_on_hand) - qty;
-      const { error } = await supabase.from("stock_items").update({ qty_on_hand: newQty }).eq("id", itemId);
-      if (error) throw error;
+      // One server-side step: the quantity comes off in the database, so two people recording at
+      // once both count, and a reorder is drafted if the item runs low.
+      await api("/api/v1/stock-usage", { method: "POST", body: JSON.stringify({ stock_item_id: itemId, qty }) });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["stock_items"] });
+      qc.invalidateQueries({ queryKey: STOCK_KEY });
+      qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       toast.success("Usage logged");
       navigate({ to: "/worker" });
     },
@@ -41,9 +44,9 @@ function Page() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Stock Usage</h1>
       <div className="space-y-2">
-        <Label>Item</Label>
+        <Label htmlFor="log-usage-item">Item</Label>
         <Select value={itemId} onValueChange={setItemId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select item" /></SelectTrigger>
+          <SelectTrigger id="log-usage-item" className="h-12 text-base"><SelectValue placeholder="Select item" /></SelectTrigger>
           <SelectContent>
             {stock.data?.map((s: any) => (
               <SelectItem key={s.id} value={s.id}>{s.name} · {NUM(s.qty_on_hand)} {s.unit ?? ""}</SelectItem>
@@ -52,10 +55,10 @@ function Page() {
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>Quantity used</Label>
-        <NumberField step="0.01" className="h-12 text-lg" value={qty} onValueChange={setQty} />
+        <Label htmlFor="log-usage-quantity-used">Quantity used</Label>
+        <NumberField id="log-usage-quantity-used" step="0.01" className="h-12 text-lg" value={qty} onValueChange={setQty} />
       </div>
-      <Button className="w-full h-14 text-base" onClick={() => submit.mutate()} disabled={submit.isPending}>
+      <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}
       </Button>
     </div>

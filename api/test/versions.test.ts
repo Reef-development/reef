@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { testApp } from "./fakes.js";
 
+const REASON = "Adjusting the site record";
+
 async function withSite() {
   const t = testApp();
   const res = await t.call("POST", "/api/v1/mines", {
@@ -22,12 +24,12 @@ describe("T8: every record carries a version", () => {
     const { call, id } = await withSite();
     const first = await call("PATCH", `/api/v1/mines/${id}`, {
       token: "owner-token",
-      body: { location: "Kriel", version: 1 },
+      body: { location: "Kriel", version: 1, reason: REASON },
     });
     expect(await first.json()).toMatchObject({ data: { version: 2 } });
     const second = await call("PATCH", `/api/v1/mines/${id}`, {
       token: "owner-token",
-      body: { team_name: "Alpha", version: 2 },
+      body: { team_name: "Alpha", version: 2, reason: REASON },
     });
     expect(await second.json()).toMatchObject({
       data: { version: 3, location: "Kriel", team_name: "Alpha" },
@@ -40,23 +42,34 @@ describe("T8: a change from an out-of-date copy is refused", () => {
     const { call, id } = await withSite();
     const res = await call("PATCH", `/api/v1/mines/${id}`, {
       token: "owner-token",
-      body: { location: "Kriel" },
+      body: { location: "Kriel", reason: REASON },
     });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.details).toContainEqual(expect.objectContaining({ path: "version" }));
   });
 
+  it("refuses a change with no reason at all", async () => {
+    const { call, id } = await withSite();
+    const res = await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { location: "Kriel", version: 1 },
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.details).toContainEqual(expect.objectContaining({ path: "reason" }));
+  });
+
   it("refuses an old version with 409, says why, and sends back the current copy", async () => {
     const { call, id, mines } = await withSite();
     await call("PATCH", `/api/v1/mines/${id}`, {
       token: "manager-token",
-      body: { location: "Ogies", version: 1 },
+      body: { location: "Ogies", version: 1, reason: REASON },
     });
 
     const res = await call("PATCH", `/api/v1/mines/${id}`, {
       token: "owner-token",
-      body: { location: "Kriel", version: 1 },
+      body: { location: "Kriel", version: 1, reason: REASON },
     });
     expect(res.status).toBe(409);
     const body = await res.json();
@@ -70,7 +83,7 @@ describe("T8: a change from an out-of-date copy is refused", () => {
     const { call, id, mines } = await withSite();
     const res = await call("PATCH", `/api/v1/mines/${id}`, {
       token: "owner-token",
-      body: { location: "Kriel", version: 99 },
+      body: { location: "Kriel", version: 99, reason: REASON },
     });
     expect(res.status).toBe(409);
     expect(mines.rows[0].version).toBe(1);
@@ -82,7 +95,7 @@ describe("T8: a change from an out-of-date copy is refused", () => {
       "/api/v1/mines/00000000-0000-4000-8000-00000000abcd",
       {
         token: "owner-token",
-        body: { location: "Kriel", version: 1 },
+        body: { location: "Kriel", version: 1, reason: REASON },
       },
     );
     expect(res.status).toBe(404);
@@ -97,11 +110,11 @@ describe("T8: two people saving at the same moment", () => {
     const [a, b] = await Promise.all([
       call("PATCH", `/api/v1/mines/${id}`, {
         token: "owner-token",
-        body: { location: "Kriel", version: 1 },
+        body: { location: "Kriel", version: 1, reason: REASON },
       }),
       call("PATCH", `/api/v1/mines/${id}`, {
         token: "manager-token",
-        body: { location: "Ogies", version: 1 },
+        body: { location: "Ogies", version: 1, reason: REASON },
       }),
     ]);
 
@@ -115,7 +128,7 @@ describe("T8: two people saving at the same moment", () => {
     const saves = ["A", "B", "C", "D", "E"].map((team) =>
       call("PATCH", `/api/v1/mines/${id}`, {
         token: "owner-token",
-        body: { team_name: team, version: 1 },
+        body: { team_name: team, version: 1, reason: REASON },
       }),
     );
     const statuses = (await Promise.all(saves)).map((r) => r.status);

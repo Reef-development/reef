@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useList, ZAR, NUM } from "@/lib/reef-db";
+import { useList, ZAR, NUM, RPT } from "@/lib/reef-db";
+import { byCostPerTonDesc, costPerTon } from "@reef/shared";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,7 +50,7 @@ function Page() {
         key: `${d.getFullYear()}-${d.getMonth()}`,
         month: d.toLocaleString("default", { month: "short", year: "2-digit" }),
         tons, mag, ot, maint: mt, statics: st, total,
-        rpt: tons > 0 ? total / tons : 0,
+        rpt: costPerTon(total, tons),
       });
     }
     const active = months.filter((m) => m.total > 0 || m.tons > 0);
@@ -61,15 +62,15 @@ function Page() {
       const eq = (equipment.data ?? []).filter((e) => e.mine_id === m.id).map((e) => e.id);
       const mt = (maint.data ?? []).filter((x) => eq.includes(x.equipment_id)).reduce((s, x) => s + Number(x.total_cost), 0);
       const total = variable + mt;
-      return { id: m.id, name: m.name, tons, variable, maint: mt, total, rpt: tons > 0 ? total / tons : 0 };
-    }).sort((a, b) => b.rpt - a.rpt);
+      return { id: m.id, name: m.name, tons, variable, maint: mt, total, rpt: costPerTon(total, tons) };
+    }).sort((a, b) => byCostPerTonDesc(a.rpt, b.rpt));
 
     const totals = active.reduce((a, m) => ({
       tons: a.tons + m.tons, mag: a.mag + m.mag, ot: a.ot + m.ot,
       maint: a.maint + m.maint, statics: a.statics + m.statics, total: a.total + m.total,
     }), { tons: 0, mag: 0, ot: 0, maint: 0, statics: 0, total: 0 });
 
-    return { months: active, perMine, totals, rpt: totals.tons > 0 ? totals.total / totals.tons : 0 };
+    return { months: active, perMine, totals, rpt: costPerTon(totals.total, totals.tons) };
   }, [production.data, maint.data, staticCosts.data, mines.data, equipment.data]);
 
   const variableShare = model.totals.total > 0 ? ((model.totals.total - model.totals.statics) / model.totals.total) * 100 : 0;
@@ -82,7 +83,7 @@ function Page() {
       <PageHeader title="Cost Analytics" description="Rand per ton, decomposed. Static vs variable spend across every contract." />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Blended Rand / Ton" value={ZAR(model.rpt)} />
+        <Stat label="Blended Rand / Ton" value={RPT(model.rpt)} />
         <Stat label="Total Tonnes (12m)" value={NUM(model.totals.tons)} />
         <Stat label="Total Spend (12m)" value={ZAR(model.totals.total)} />
         <Stat label="Variable share" value={`${variableShare.toFixed(0)}%`} sub={`Static ${ZAR(model.totals.statics)}`} />
@@ -138,7 +139,7 @@ function Page() {
                     <TableCell className="text-right">{ZAR(m.variable)}</TableCell>
                     <TableCell className="text-right">{ZAR(m.maint)}</TableCell>
                     <TableCell className="text-right">{ZAR(m.total)}</TableCell>
-                    <TableCell className="text-right font-semibold">{ZAR(m.rpt)}</TableCell>
+                    <TableCell className="text-right font-semibold">{RPT(m.rpt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -168,7 +169,7 @@ function Page() {
                     <TableCell className="text-right">{ZAR(m.mag)}</TableCell>
                     <TableCell className="text-right">{ZAR(m.ot)}</TableCell>
                     <TableCell className="text-right">{ZAR(m.total)}</TableCell>
-                    <TableCell className="text-right font-semibold">{ZAR(m.rpt)}</TableCell>
+                    <TableCell className="text-right font-semibold">{RPT(m.rpt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

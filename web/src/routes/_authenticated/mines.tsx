@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useList, useUpsert, useRemove, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -16,7 +17,8 @@ export const Route = createFileRoute("/_authenticated/mines")({ component: Page 
 function Page() {
   const list = useList<any>("mines", "name", true);
   const clients = useList<any>("clients", "name", true);
-  const upsert = useUpsert("mines");
+  const upsert = useUpsert("mines", { showsConflicts: true });
+  const reason = useChangeReason();
   const remove = useRemove("mines");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -31,6 +33,9 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     const typed = {
       name: f.get("name"),
       location: f.get("location") || null,
@@ -40,7 +45,7 @@ function Page() {
     };
     try {
       await upsert.mutateAsync({
-        ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
+        ...(editing?.id ? { id: editing.id, version: editing.version, changeReason: why } : {}),
         ...typed,
       });
     } catch (err) {
@@ -97,6 +102,7 @@ function Page() {
             <Field label="Location"><Input name="location" defaultValue={editing?.location ?? ""} placeholder="e.g. Mpumalanga" /></Field>
             <Field label="Team name"><Input name="team_name" defaultValue={editing?.team_name ?? ""} /></Field>
             <Field label="Target cost per ton (ZAR)"><Input name="target_cost_per_ton" type="number" step="0.01" defaultValue={editing?.target_cost_per_ton ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

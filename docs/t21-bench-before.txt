@@ -1,0 +1,63 @@
+=== recent-production ===
+Dashboard: production for the current month, newest first.
+Planning: 0.104 ms   Execution: 18.314 ms
+
+Limit  (cost=1634.29..1634.49 rows=78 width=156) (actual time=18.253..18.274 rows=100 loops=1)
+  Buffers: shared hit=868
+  ->  Sort  (cost=1634.29..1634.49 rows=78 width=156) (actual time=18.251..18.262 rows=100 loops=1)
+        Sort Key: date DESC
+        Sort Method: quicksort  Memory: 48kB
+        Buffers: shared hit=868
+        ->  Seq Scan on production_logs  (cost=0.00..1631.84 rows=78 width=156) (actual time=0.017..18.185 rows=135 loops=1)
+              Filter: (date >= date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))
+              Rows Removed by Filter: 49140
+              Buffers: shared hit=868
+Planning Time: 0.104 ms
+Execution Time: 18.314 ms
+
+
+=== per-mine-recent ===
+Analytics: recent production for one mine.
+Planning: 0.138 ms   Execution: 7.47 ms
+
+Limit  (cost=1661.94..1662.19 rows=100 width=156) (actual time=7.409..7.427 rows=100 loops=1)
+  Buffers: shared hit=869
+  InitPlan 1
+    ->  Limit  (cost=16.30..16.30 rows=1 width=48) (actual time=0.018..0.019 rows=1 loops=1)
+          Buffers: shared hit=1
+          ->  Sort  (cost=16.30..17.35 rows=420 width=48) (actual time=0.017..0.018 rows=1 loops=1)
+                Sort Key: mines.name
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=1
+                ->  Seq Scan on mines  (cost=0.00..14.20 rows=420 width=48) (actual time=0.005..0.006 rows=3 loops=1)
+                      Buffers: shared hit=1
+  ->  Sort  (cost=1645.64..1646.54 rows=361 width=156) (actual time=7.408..7.414 rows=100 loops=1)
+        Sort Key: production_logs.date DESC
+        Sort Method: top-N heapsort  Memory: 42kB
+        Buffers: shared hit=869
+        ->  Seq Scan on production_logs  (cost=0.00..1631.84 rows=361 width=156) (actual time=0.035..7.224 rows=465 loops=1)
+              Filter: ((mine_id = (InitPlan 1).col1) AND (date >= (CURRENT_DATE - '30 days'::interval)))
+              Rows Removed by Filter: 48810
+              Buffers: shared hit=869
+Planning Time: 0.138 ms
+Execution Time: 7.470 ms
+
+
+=== site-comparison ===
+Site comparison: tonnage and cost per mine, last twelve months.
+Planning: 0.12 ms   Execution: 18.706 ms
+
+Sort  (cost=1695.76..1695.76 rows=3 width=116) (actual time=18.624..18.625 rows=3 loops=1)
+  Sort Key: (sum(tons_produced)) DESC
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=868
+  ->  HashAggregate  (cost=1695.67..1695.73 rows=3 width=116) (actual time=18.611..18.614 rows=3 loops=1)
+        Group Key: mine_id
+        Batches: 1  Memory Usage: 24kB
+        Buffers: shared hit=868
+        ->  Seq Scan on production_logs  (cost=0.00..1536.36 rows=12745 width=36) (actual time=0.025..13.150 rows=16470 loops=1)
+              Filter: (date >= (CURRENT_DATE - '1 year'::interval))
+              Rows Removed by Filter: 32805
+              Buffers: shared hit=868
+Planning Time: 0.120 ms
+Execution Time: 18.706 ms

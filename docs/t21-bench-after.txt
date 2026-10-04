@@ -1,0 +1,55 @@
+=== recent-production ===
+Dashboard: production for the current month, newest first.
+Planning: 0.17 ms   Execution: 0.109 ms
+
+Limit  (cost=0.30..94.24 rows=100 width=132) (actual time=0.016..0.069 rows=100 loops=1)
+  Buffers: shared hit=9
+  ->  Index Scan using production_logs_date_desc_idx on production_logs  (cost=0.30..133.69 rows=142 width=132) (actual time=0.015..0.058 rows=100 loops=1)
+        Index Cond: (date >= date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))
+        Buffers: shared hit=9
+Planning:
+  Buffers: shared hit=4
+Planning Time: 0.170 ms
+Execution Time: 0.109 ms
+
+
+=== per-mine-recent ===
+Analytics: recent production for one mine.
+Planning: 0.172 ms   Execution: 0.156 ms
+
+Limit  (cost=16.60..90.74 rows=100 width=132) (actual time=0.068..0.119 rows=100 loops=1)
+  Buffers: shared hit=5
+  InitPlan 1
+    ->  Limit  (cost=16.30..16.30 rows=1 width=48) (actual time=0.048..0.048 rows=1 loops=1)
+          Buffers: shared hit=1
+          ->  Sort  (cost=16.30..17.35 rows=420 width=48) (actual time=0.047..0.048 rows=1 loops=1)
+                Sort Key: mines.name
+                Sort Method: top-N heapsort  Memory: 25kB
+                Buffers: shared hit=1
+                ->  Seq Scan on mines  (cost=0.00..14.20 rows=420 width=48) (actual time=0.010..0.035 rows=3 loops=1)
+                      Buffers: shared hit=1
+  ->  Index Scan using production_logs_mine_date_desc_idx on production_logs  (cost=0.29..350.26 rows=472 width=132) (actual time=0.067..0.108 rows=100 loops=1)
+        Index Cond: ((mine_id = (InitPlan 1).col1) AND (date >= (CURRENT_DATE - '30 days'::interval)))
+        Buffers: shared hit=5
+Planning Time: 0.172 ms
+Execution Time: 0.156 ms
+
+
+=== site-comparison ===
+Site comparison: tonnage and cost per mine, last twelve months.
+Planning: 0.142 ms   Execution: 7.79 ms
+
+Sort  (cost=649.76..649.77 rows=3 width=116) (actual time=7.744..7.745 rows=3 loops=1)
+  Sort Key: (sum(tons_produced)) DESC
+  Sort Method: quicksort  Memory: 25kB
+  Buffers: shared hit=139
+  ->  HashAggregate  (cost=649.68..649.74 rows=3 width=116) (actual time=7.734..7.736 rows=3 loops=1)
+        Group Key: mine_id
+        Batches: 1  Memory Usage: 24kB
+        Buffers: shared hit=139
+        ->  Index Only Scan using production_logs_site_comparison_idx on production_logs  (cost=0.42..442.41 rows=16582 width=34) (actual time=0.016..2.572 rows=16470 loops=1)
+              Index Cond: (date >= (CURRENT_DATE - '1 year'::interval))
+              Heap Fetches: 0
+              Buffers: shared hit=139
+Planning Time: 0.142 ms
+Execution Time: 7.790 ms

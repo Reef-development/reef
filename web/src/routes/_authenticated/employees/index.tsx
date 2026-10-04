@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
@@ -35,6 +37,7 @@ export function Page() {
   const mines = useList<any>("mines", "name", true);
   const attendance = useList<any>("attendance", "date");
   const upsert = useUpsert("employees");
+  const reason = useChangeReason();
   const remove = useRemove("employees");
 
   const [open, setOpen] = useState(false);
@@ -50,13 +53,21 @@ export function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
-    await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
+    const idNumber = String(f.get("id_number") || "");
+
+    // T11: id_number is not on `employees` anymore. It lives in a separate
+    // table, written through set_employee_id_number. So we save the general
+    // fields first, then write the identity number through the RPC if the
+    // user typed one.
+    const savedEmployee = (await upsert.mutateAsync({
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       full_name: f.get("full_name"),
       employee_no: f.get("employee_no") || null,
       position: f.get("position") || null,
       phone: f.get("phone") || null,
-      id_number: f.get("id_number") || null,
       hire_date: f.get("hire_date") || null,
       mine_id: mineId === "none" ? null : mineId,
       shift,
@@ -64,7 +75,19 @@ export function Page() {
       hourly_rate: Number(f.get("hourly_rate") || 0),
       notes: f.get("notes") || null,
       active: true,
-    });
+    })) as any;
+
+    if (idNumber) {
+      const { error } = await supabase.rpc("set_employee_id_number", {
+        _employee_id: savedEmployee.id,
+        _id_number: idNumber,
+      });
+      if (error) {
+        console.error("Failed to save employee ID number:", error);
+        return;
+      }
+    }
+
     setOpen(false);
   };
 
@@ -114,14 +137,14 @@ export function Page() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={filterMine} onValueChange={setFilterMine}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All mines" /></SelectTrigger>
+          <SelectTrigger className="w-48" aria-label="Filter by mine"><SelectValue placeholder="All mines" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All mines</SelectItem>
             {mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterShift} onValueChange={setFilterShift}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="All shifts" /></SelectTrigger>
+          <SelectTrigger className="w-40" aria-label="Filter by shift"><SelectValue placeholder="All shifts" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All shifts</SelectItem>
             {SHIFTS.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
@@ -140,7 +163,12 @@ export function Page() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Phone"><Input name="phone" defaultValue={editing?.phone ?? ""} /></Field>
-              <Field label="ID number"><Input name="id_number" defaultValue={editing?.id_number ?? ""} /></Field>
+              <Field label="ID number">
+                <Input
+                  name="id_number"
+                  placeholder={editing ? "Enter a new ID number to change it" : "Enter ID number"}
+                />
+              </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Mine">
@@ -165,6 +193,7 @@ export function Page() {
             </div>
             <Field label="Hire date"><Input name="hire_date" type="date" defaultValue={editing?.hire_date ?? ""} /></Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

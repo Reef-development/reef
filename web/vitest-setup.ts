@@ -20,9 +20,8 @@ globalThis.ResizeObserver = class ResizeObserver {
 
 /**
  * jsdom does not implement PointerEvent capture. Radix UI's Select calls
- * `hasPointerCapture` on the pointer target when it opens. A no-op that returns false
- * keeps the open path working: the check is a guard for browsers where a prior pointer
- * capture is still held.
+ * hasPointerCapture on the pointer target when it opens. A no-op that returns false
+ * keeps the open path working.
  */
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
