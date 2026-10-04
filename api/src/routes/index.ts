@@ -22,6 +22,7 @@ import type { Registry } from "../registry.js";
 import { dailyOpsRoutes } from "./daily-ops.js";
 import { adminRoutes } from "./admin.js";
 import { analyticsRoutes } from "./analytics.js";
+import { purchasingRoutes } from "./purchasing.js";
 import { defineRoute } from "./define.js";
 import { notificationRoutes } from "./notifications.js";
 import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
@@ -198,6 +199,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   });
 
   dailyOpsRoutes(app, registry);
+  purchasingRoutes(app, registry);
   scopedResourceRoutes(app, registry, {
     name: "stock",
     noun: "stock item",

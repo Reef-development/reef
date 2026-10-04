@@ -52,3 +52,34 @@ export type PurchaseOrder = {
 };
 
 export const PURCHASE_ORDER_SORTABLE = ["created_at", "status", "total_cost"] as const;
+
+/** A line on a purchase order: a part from the order's own plant, how many, and the price. */
+export const PoLineInput = z
+  .object({
+    stock_item_id: Id,
+    qty: z.number().positive("Quantity must be more than zero"),
+    /** Leave out to use the part's catalogue price. */
+    unit_cost: z.number().nonnegative().optional(),
+  })
+  .strict();
+export type PoLineInput = z.infer<typeof PoLineInput>;
+
+export type PoLine = {
+  id: string;
+  po_id: string;
+  stock_item_id: string | null;
+  qty: number;
+  unit_cost: number;
+};
+
+const ActionReason = z
+  .string()
+  .trim()
+  .min(1, "A reason is required")
+  .max(500, "The reason is too long (500 characters maximum)");
+
+/** Approving, ordering or receiving: a reason is welcome but not required. */
+export const PoAction = z.object({ reason: ActionReason.optional() }).strict();
+/** Cancelling: a reason is required, because a cancelled order is final. */
+export const PoCancel = z.object({ reason: ActionReason }).strict();
+export type PoAction = z.infer<typeof PoAction>;

@@ -6,9 +6,12 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PoLine,
+  PoLineInput,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderPatch,
+  PurchaseOrderStatus,
   Stock,
   StockInput,
   StockLevel,
@@ -21,6 +24,7 @@ import type { Machine } from "../src/services/service-due.js";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
+import type { PurchaseActionsRepository } from "../src/repositories/purchase-actions.js";
 import type {
   AnalyticsRepository,
   HistoryEntry,
@@ -756,6 +760,109 @@ export class MemorySweep implements ServiceSweepRepository {
   }
 }
 
+/** Which status may follow which, as guard_po_status allows in the database. */
+const NEXT: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  draft: ["approved", "cancelled"],
+  approved: ["ordered", "received", "cancelled"],
+  ordered: ["received", "cancelled"],
+  received: [],
+  cancelled: [],
+};
+
+/**
+ * The stand-in for purchase order lines and po_transition. Visibility follows the T14 fake's
+ * plant rule; the line and status rules follow the database. `received` counts how often each
+ * order's stock was added, so a test can prove a delivery is never added twice.
+ */
+export class MemoryPurchaseActions implements PurchaseActionsRepository {
+  lines_: PoLine[] = [];
+  received = new Map<string, number>();
+
+  constructor(
+    private readonly orders: MemoryPurchaseOrder,
+    private readonly stock: MemoryStock,
+    private readonly user: () => UserContext,
+  ) {}
+
+  private order(poId: string) {
+    const row = this.orders.rows.find((r) => r.id === poId);
+    const u = this.user();
+    if (!row || (u.role !== "owner" && row.plant !== u.plant)) return null;
+    return row;
+  }
+
+  private draftOnly(status: PurchaseOrderStatus) {
+    if (status !== "draft") {
+      throw new ApiError(
+        "CONFLICT",
+        `Lines can only be changed while the order is a draft. This order is ${status}.`,
+      );
+    }
+  }
+
+  private retotal(poId: string) {
+    const row = this.orders.rows.find((r) => r.id === poId);
+    if (row) {
+      row.total_cost = this.lines_
+        .filter((l) => l.po_id === poId)
+        .reduce((sum, l) => sum + l.qty * l.unit_cost, 0);
+    }
+  }
+
+  async lines(poId: string) {
+    return this.order(poId) ? this.lines_.filter((l) => l.po_id === poId) : null;
+  }
+
+  async addLine(poId: string, line: PoLineInput) {
+    const order = this.order(poId);
+    if (!order) return null;
+    this.draftOnly(order.status);
+    const item = this.stock.rows.find((r) => r.id === line.stock_item_id);
+    if (!item || item.plant !== order.plant) {
+      throw new ApiError("NOT_FOUND", "That stock item is not at this order's plant");
+    }
+    const created: PoLine = {
+      id: randomUUID(),
+      po_id: poId,
+      stock_item_id: line.stock_item_id,
+      qty: line.qty,
+      unit_cost: line.unit_cost ?? Number(item.unit_cost ?? 0),
+    };
+    this.lines_.push(created);
+    this.retotal(poId);
+    return created;
+  }
+
+  async removeLine(poId: string, lineId: string) {
+    const order = this.order(poId);
+    if (!order) return null;
+    this.draftOnly(order.status);
+    const before = this.lines_.length;
+    this.lines_ = this.lines_.filter((l) => !(l.id === lineId && l.po_id === poId));
+    this.retotal(poId);
+    return this.lines_.length < before;
+  }
+
+  async transition(poId: string, to: PurchaseOrderStatus, reason?: string) {
+    const order = this.order(poId);
+    if (!order) return null;
+    if (order.status === to) throw new ApiError("CONFLICT", `This order is already ${to}.`);
+    if (!NEXT[order.status].includes(to)) {
+      throw new ApiError("CONFLICT", `An order that is ${order.status} cannot be marked ${to}.`);
+    }
+    if (to === "approved" && !this.lines_.some((l) => l.po_id === poId)) {
+      throw new ApiError("CONFLICT", "An order with no lines cannot be approved.");
+    }
+    if (to === "cancelled" && !reason?.trim()) {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when cancelling an order");
+    }
+    if (to === "received") this.received.set(poId, (this.received.get(poId) ?? 0) + 1);
+    order.status = to;
+    order.version += 1;
+    return { ...order };
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   // The signed-in user of the current request, which the history records as the actor, the
@@ -775,6 +882,9 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   production.audit = { table: "production_logs", history, actor };
   fuel.audit = { table: "fuel_slips", history, actor };
   maintenance.audit = { table: "maintenance_logs", history, actor };
+  // The signed-in user of the current request, for the purchase actions' plant rule.
+  let caller: UserContext = { role: "", plant: null };
+  const purchaseActions = new MemoryPurchaseActions(purchaseOrders, stock, () => caller);
   const usage: { stock_item_id: string; qty: number }[] = [];
   const photoRequests: string[] = [];
   const analytics = new MemoryAnalytics();
@@ -831,6 +941,10 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     repositories: (token) => {
       const user = USERS[token];
       currentUserId = user?.id ?? null;
+      caller = {
+        role: ["owner", "manager", "worker"].find((r) => user?.roles.includes(r)) ?? "",
+        plant: user?.plant ?? null,
+      };
       return {
         roles: {
           forUser: async () => user?.roles ?? [],
@@ -848,6 +962,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         stock,
         stockLevels,
         purchaseOrders,
+        purchaseActions,
         analytics,
         retention,
         notifications,
@@ -894,11 +1009,12 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     stock,
     stockLevels,
     purchaseOrders,
-    sessionRows,
     analytics,
-    retention,
-    notifications,
     jobs,
+    notifications,
+    purchaseActions,
+    retention,
+    sessionRows,
     logged,
     call,
   };

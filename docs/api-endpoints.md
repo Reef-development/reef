@@ -2,7 +2,7 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-57 endpoints, 57 explained.
+64 endpoints, 64 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
@@ -39,6 +39,13 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | POST | `/api/v1/stock-usage` | owner, manager, worker | Records stock used on the plant. The quantity comes off in one database step, so two people recording at once both count, and a reorder is drafted if the item falls to its reorder point. | A zero or negative quantity, or a stock item that does not exist. |
 | POST | `/api/v1/photos/upload-url` | owner, manager, worker | Issues a one-time link for uploading a repair, fuel or downtime photo. The API chooses the file name, under the caller's own folder, so nobody can overwrite another person's photo. | Anything other than a JPEG, PNG or WebP image, or an unknown folder. |
 | GET | `/api/v1/photos/view` | owner, manager, worker | Returns a link to view a stored photo for one hour. | A path this system did not issue, or a photo the caller may not see: workers see their own, managers and owners see all. |
+| GET | `/api/v1/purchase-orders/:id/lines` | owner, manager | Lists the lines on one purchase order: which part, how many, and at what price. | Workers, and an order at another plant, which answers not found. |
+| POST | `/api/v1/purchase-orders/:id/lines` | owner, manager | Adds a line to a draft order. Leave the price out to use the part's catalogue price. The order's total follows. | An order that is no longer a draft, because what was approved must be what is ordered; a part from another plant; a quantity of zero or less; and workers. |
+| DELETE | `/api/v1/purchase-orders/:id/lines/:lineId` | owner, manager | Removes a line from a draft order. The order's total follows. | An order that is no longer a draft, a line that is not on this order, and workers. |
+| POST | `/api/v1/purchase-orders/:id/approve` | owner, manager | Approves a draft order, so it can be sent to the supplier. | An order that is not a draft, or has no lines. Also workers, and another plant's order, which answers not found. |
+| POST | `/api/v1/purchase-orders/:id/order` | owner, manager | Marks an approved order as sent to the supplier. Optional: an order can be received straight from approved. | An order that is not approved. Also workers, and another plant's order, which answers not found. |
+| POST | `/api/v1/purchase-orders/:id/receive` | owner, manager | Marks the delivery as received, which adds its parts to the plant's stock. | An order that is not approved or ordered, and an order already received, so the same delivery can never add stock twice. Also workers, and another plant's order, which answers not found. |
+| POST | `/api/v1/purchase-orders/:id/cancel` | owner, manager | Cancels an order that has not been received yet, with a reason. | An order already received or cancelled, and a missing reason, because a cancelled order is final. Also workers, and another plant's order, which answers not found. |
 | GET | `/api/v1/stock` | owner, manager, worker | Lists stock items for the caller's plant. An owner sees every plant; everyone else sees only their own. | An unknown sort column or a page size above 200. |
 | GET | `/api/v1/stock/:id` | owner, manager, worker | Returns one stock item, or 404 if it belongs to another plant. | An id that is not a UUID, or a record that does not exist. |
 | POST | `/api/v1/stock` | owner, manager | Adds a stock item. The plant is taken from the caller, except for an owner, who may set it. | Missing or invalid fields, and any field it does not recognise. |
