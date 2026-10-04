@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ListQuery } from "@reef/shared";
+import type { ListQuery, Role, UserSummary } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type {
   HistoryEntry,
@@ -9,6 +9,7 @@ import type {
   Repository,
   RoleRepository,
   UpdateResult,
+  UserRepository,
 } from "./types.js";
 
 type PgError = { code?: string; message: string };
@@ -29,6 +30,13 @@ function translate(err: PgError): ApiError {
     case "23514":
       // update_versioned raises this when the reason is missing.
       return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    // Raised by the database functions with a message written for the person reading it.
+    case "22023":
+      return new ApiError("VALIDATION_FAILED", err.message);
+    case "RF404":
+      return new ApiError("NOT_FOUND", err.message);
+    case "RF409":
+      return new ApiError("CONFLICT", err.message);
     default:
       return new ApiError("INTERNAL", err.message);
   }
@@ -132,5 +140,33 @@ export class SupabaseHistoryRepository implements HistoryRepository {
       .range(from, from + q.pageSize - 1);
     if (error) throw translate(error);
     return { rows: (data ?? []) as HistoryEntry[], total: count ?? 0 };
+  }
+}
+
+/**
+ * The owner's user list and role changes, through list_users and set_user_role. Both check in
+ * the database that the caller is an owner, so a missed check in the API still cannot leak or
+ * change anyone's account.
+ */
+export class SupabaseUserRepository implements UserRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async list(): Promise<UserSummary[]> {
+    const { data, error } = await this.db.rpc("list_users");
+    if (error) throw translate(error);
+    return (data ?? []) as UserSummary[];
+  }
+
+  async setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null> {
+    const { data, error } = await this.db.rpc("set_user_role", {
+      _user: userId,
+      _role: role,
+      _reason: reason,
+    });
+    if (error) {
+      if (error.code === "RF404") return null;
+      throw translate(error);
+    }
+    return ((data ?? []) as UserSummary[])[0] ?? null;
   }
 }

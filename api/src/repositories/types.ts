@@ -1,4 +1,4 @@
-import type { HistoryQuery, ListQuery } from "@reef/shared";
+import type { HistoryQuery, ListQuery, Role, UserSummary } from "@reef/shared";
 
 export type { HistoryQuery };
 
@@ -60,4 +60,11 @@ export type HistoryEntry = {
 export interface HistoryRepository {
   /** Changes newest first, optionally for one table or one record. */
   list(query: HistoryQuery): Promise<Page<HistoryEntry>>;
+}
+
+export interface UserRepository {
+  /** Everyone who can sign in. Refused in the database unless the caller is an owner. */
+  list(): Promise<UserSummary[]>;
+  /** Sets one person's role and records why. Null if there is no such account. */
+  setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null>;
 }

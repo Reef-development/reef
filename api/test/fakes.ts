@@ -1,5 +1,13 @@
 import { randomUUID } from "node:crypto";
-import type { HistoryQuery, ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
+import type {
+  HistoryQuery,
+  ListQuery,
+  Mine,
+  MineInput,
+  MinePatch,
+  Role,
+  UserSummary,
+} from "@reef/shared";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
@@ -9,6 +17,7 @@ import type {
   Page,
   Repository,
   UpdateResult,
+  UserRepository,
 } from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
@@ -157,6 +166,56 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 }
 
+/**
+ * The stand-in for list_users and set_user_role: the three real roles, a reason, never leaving
+ * the platform without an owner, and the change written to the history.
+ */
+export class MemoryUsers implements UserRepository {
+  rows: UserSummary[] = Object.entries(USERS).map(([token, u]) => ({
+    id: u.id,
+    full_name: token.replace("-token", ""),
+    email: `${token.replace("-token", "")}@reef.test`,
+    role: (["owner", "manager", "worker"].find((r) => u.roles.includes(r)) ?? null) as Role | null,
+    plant: null,
+    created_at: "2026-09-01T00:00:00Z",
+  }));
+
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly actor: () => string | null,
+  ) {}
+
+  async list() {
+    return this.rows.map((r) => ({ ...r }));
+  }
+
+  async setRole(userId: string, role: Role, reason: string) {
+    const row = this.rows.find((r) => r.id === userId);
+    if (!row) return null;
+    const owners = this.rows.filter((r) => r.role === "owner").length;
+    if (row.role === "owner" && role !== "owner" && owners <= 1) {
+      throw new ApiError(
+        "CONFLICT",
+        "There must always be at least one owner. Make someone else an owner first.",
+      );
+    }
+    if (row.role !== role) {
+      this.history.append({
+        table_name: "user_roles",
+        row_id: userId,
+        changed_by: this.actor() ?? "00000000-0000-0000-0000-000000000000",
+        reason,
+        plant: null,
+        old_values: { role: row.role },
+        new_values: { role },
+        version: this.history.rows.filter((h) => h.row_id === userId).length + 1,
+      });
+      row.role = role;
+    }
+    return { ...row };
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
 
@@ -165,6 +224,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   // repositories closure, so it changes per request.
   let currentUserId: string | null = null;
   const mines = new MemoryMines(history, () => currentUserId);
+  const users = new MemoryUsers(history, () => currentUserId);
 
   const logged: unknown[] = [];
   const { app, registry } = createApp({
@@ -179,6 +239,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       return {
         roles: { forUser: async () => USERS[token]?.roles ?? [] },
         history,
+        users,
         mines,
         ...overrides,
       };
@@ -201,5 +262,5 @@ export function testApp(overrides: Partial<Repositories> = {}) {
             : JSON.stringify(opts.body),
     });
 
-  return { app, registry, mines, history, logged, call };
+  return { app, registry, mines, history, users, logged, call };
 }

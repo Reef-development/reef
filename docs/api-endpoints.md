@@ -2,13 +2,15 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-8 endpoints, 8 explained.
+10 endpoints, 10 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
 | GET | `/health` | Anyone | Reports that the API process is up. The deploy polls it to know when to stop waiting. | - |
 | GET | `/api/v1/me` | Any signed-in user | Returns the signed-in user's id and role, so the web app can choose which screens to show. | A missing, expired or foreign token. |
 | GET | `/api/v1/history` | owner, manager | Lists changes to records, newest first, each with who made it, why, and the old and new values. Filter by table and record to show one record's history. | Workers, because history can show pay and personal details. A manager is not refused but sees only changes at their own plant. Also refuses a malformed record id or a page size above 200. |
+| GET | `/api/v1/users` | owner | Lists everyone who can sign in, with their role and plant, so the owner can see who has access and change it. | Anyone but the owner, because the list shows every person's email and role. The database refuses it too. |
+| PATCH | `/api/v1/users/:id/role` | owner | Changes one person's role to owner, manager or worker, and records why in the history. | Anyone but the owner; a role that is not one of the three; a missing reason; an account that does not exist; and a change that would leave nobody as owner, because then nobody could manage roles again. |
 | GET | `/api/v1/mines` | owner, manager, worker | Lists the sites REEF operates, paged and sorted. Every role reads it to pick a site on capture forms. | An unknown sort column or a page size above 200. |
 | GET | `/api/v1/mines/:id` | owner, manager, worker | Returns one site. | An id that is not a UUID, or a record that does not exist. |
 | POST | `/api/v1/mines` | owner, manager | Adds a site. Owners and managers only, because a site carries the cost-per-ton target. | Missing or invalid fields, and any field it does not recognise. |

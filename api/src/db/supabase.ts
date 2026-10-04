@@ -5,6 +5,7 @@ import {
   SupabaseHistoryRepository,
   SupabaseRoleRepository,
   SupabaseTableRepository,
+  SupabaseUserRepository,
 } from "../repositories/supabase.js";
 
 /**
@@ -21,6 +22,7 @@ export function supabaseRepositories(config: Config) {
     return {
       roles: new SupabaseRoleRepository(db),
       history: new SupabaseHistoryRepository(db),
+      users: new SupabaseUserRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
     };
   };
