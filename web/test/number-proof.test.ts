@@ -31,8 +31,8 @@ describe("extractNumbers", () => {
 describe("collectKnownNumbers", () => {
   it("includes array lengths, not just field values", () => {
     const known = collectKnownNumbers([SAMPLE_TOOL_OUTPUT]);
-    expect(known).toContain(3); // low_stock.length
-    expect(known).toContain(2); // purchase_orders.length
+    expect(known).toContain(3);
+    expect(known).toContain(2);
     expect(known).toContain(42);
     expect(known).toContain(1284500.5);
   });
@@ -47,7 +47,6 @@ describe("verifyAnswer — the required deliberately-invented-number test", () =
   });
 
   it("catches a deliberately invented number that never appeared in the fetched data", () => {
-    // 42 and 3 are real; 999 is planted and has no source in SAMPLE_TOOL_OUTPUT.
     const answer =
       "You have 42 stock items, 3 are low, and inventory has grown by 999 units since last month.";
     const result = verifyAnswer(answer, [SAMPLE_TOOL_OUTPUT]);
@@ -59,7 +58,6 @@ describe("verifyAnswer — the required deliberately-invented-number test", () =
   });
 
   it("catches a subtly wrong currency figure, not just wildly-off ones", () => {
-    // Real value is 1284500.50; this is close enough to look plausible but is not what was fetched.
     const answer = "Total inventory value is R1 300 000.00.";
     const result = verifyAnswer(answer, [SAMPLE_TOOL_OUTPUT]);
     expect(result.ok).toBe(false);

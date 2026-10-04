@@ -1,98 +1,151 @@
 /**
- * T9: makes the assistant prove its numbers.
+ * T9: proves the numbers in a drafted answer before it reaches the user.
  *
- * After Reefie drafts an answer, every number in that answer must trace back to a figure the
- * data tools actually returned this turn. Anything that doesn't match is treated as invented,
- * even if it looks plausible: a hallucinated number that happens to be "close" to a real one is
- * exactly the failure mode this exists to catch.
+ * The rule: every number in the draft must trace back to a figure the tools actually
+ * returned this turn. If it doesn't, the draft is thrown away and the fallback is shown.
  *
- * This file has no dependency on the AI gateway, Supabase, or the request/response cycle, so it
- * can be tested with plain fixtures (see test/number-proof.test.ts).
+ * Two cases are deliberately skipped at extraction time, so nothing downstream has to
+ * reason about them:
+ *
+ *   - Years (1900-2100). "As of 2026, production is steady" is a date, not a claim.
+ *   - Tiny integers (0-4). "3 of them are low" is a count, but it's usually incidental.
+ *     This one is left in place and filtered by the comparison, because sometimes it is
+ *     a real claim.
  */
 
-/** A number pulled out of the assistant's answer, with where it came from for the fallback note. */
-export type ExtractedNumber = {
-  value: number;
-  raw: string;
-};
+export type BadNumber = { value: number; raw: string };
 
-/** Recognises currency (R1 234.56), plain numbers, decimals and percentages. Ignores bare years
- *  in four-digit form only when they look like a calendar year (2000-2099) written with no
- *  decimal, currency sign or percent sign, since those are dates the model is allowed to state
- *  on its own (e.g. "as of 2026") rather than figures it owes the data for. */
-const NUMBER_PATTERN =
-  /R\s?-?\d[\d\s,]*(?:\.\d+)?|-?\d[\d\s,]*(?:\.\d+)?\s?%|-?\d[\d\s,]*\.\d+|-?\d{1,3}(?:[ ,]\d{3})+|-?\d+/g;
+export type CheckResult =
+  | { ok: true }
+  | { ok: false; badNumbers: BadNumber[] };
 
-function looksLikeBareCalendarYear(raw: string): boolean {
-  return /^\d{4}$/.test(raw.trim()) && Number(raw) >= 2000 && Number(raw) <= 2099;
-}
+type FoundNumber = { value: number; start: number; end: number; raw: string };
 
-export function extractNumbers(text: string): ExtractedNumber[] {
-  const found: ExtractedNumber[] = [];
-  const matches = text.match(NUMBER_PATTERN) ?? [];
-  for (const raw of matches) {
-    if (looksLikeBareCalendarYear(raw)) continue;
-    const isPercent = raw.trim().endsWith("%");
-    const cleaned = raw.replace(/[R%]/g, "").replace(/[\s,]/g, "").trim();
-    if (cleaned === "" || cleaned === "-") continue;
-    const value = Number(cleaned);
+/**
+ * Matches a standalone number and returns it with its offsets. Years in 1900-2100 are
+ * dropped: they're dates, not figures, and no tool returns a year as a value to be
+ * verified.
+ */
+function extractNumbersFromText(text: string): FoundNumber[] {
+  const out: FoundNumber[] = [];
+  if (!text) return out;
+
+  // Matches: an optional R prefix, then a number that is either grouped (1 234 567.89)
+  // or plain (42). Word boundaries on both sides keep it from matching inside identifiers
+  // like "rig07".
+  const re = /(?<![\w])(?:R\s*)?(\d{1,3}(?:[ ,]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![\w])/g;
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const raw = m[1];
+    const value = Number(raw.replace(/[ ,]/g, ""));
     if (!Number.isFinite(value)) continue;
-    found.push({ value: isPercent ? value : value, raw });
+
+    // Drop years. A four-digit number in the 1900-2100 range is almost always a date,
+    // not a claim about data, and no tool returns a year as a value.
+    if (Number.isInteger(value) && value >= 1900 && value <= 2100) continue;
+
+    out.push({ value, start: m.index, end: m.index + m[0].length, raw });
   }
-  return found;
+  return out;
 }
 
-/** Walks any JSON-shaped tool output and collects every number it contains, plus the length of
- *  every array (so "you have 3 items below reorder point" checks out against low_stock.length
- *  even though 3 itself never appears as a field value). */
-export function collectKnownNumbers(toolOutputs: unknown[]): number[] {
-  const known: number[] = [];
-  const seen = new Set<unknown>();
+/**
+ * Reads the numbers out of a piece of text. Exposed for the tests.
+ */
+export function extractNumbers(text: string): FoundNumber[] {
+  return extractNumbersFromText(text);
+}
 
-  function walk(node: unknown) {
-    if (node === null || node === undefined) return;
-    if (typeof node === "number" && Number.isFinite(node)) {
-      known.push(node);
-      return;
-    }
-    if (typeof node !== "object") return;
-    if (seen.has(node)) return;
-    seen.add(node);
+/**
+ * Walks the tool output and collects every number it can find. Numbers appear as number
+ * values, as numeric strings, as array lengths, and as digits embedded in strings.
+ */
+export function collectKnownNumbers(node: unknown, out: Set<number> = new Set()): Set<number> {
+  if (node === null || node === undefined) return out;
 
-    if (Array.isArray(node)) {
-      known.push(node.length);
-      for (const item of node) walk(item);
-      return;
+  if (typeof node === "number") {
+    if (Number.isFinite(node)) {
+      out.add(node);
+      out.add(node * 100);
+      out.add(node / 100);
     }
-    for (const value of Object.values(node as Record<string, unknown>)) walk(value);
+    return out;
   }
 
-  for (const output of toolOutputs) walk(output);
-  return known;
+  if (typeof node === "boolean") return out;
+
+  if (typeof node === "bigint") {
+    const v = Number(node);
+    if (Number.isFinite(v)) out.add(v);
+    return out;
+  }
+
+  if (typeof node === "string") {
+    for (const { value } of extractNumbersFromText(node)) {
+      out.add(value);
+      out.add(value * 100);
+      out.add(value / 100);
+    }
+    // Also collect raw digit-runs so identifiers like "Drill rig 07" register the 7.
+    const loose = node.match(/\d+(?:[.,]\d+)?/g);
+    if (loose) {
+      for (const raw of loose) {
+        const v = Number(raw.replace(",", "."));
+        if (Number.isFinite(v)) {
+          out.add(v);
+          out.add(v * 100);
+          out.add(v / 100);
+        }
+      }
+    }
+    return out;
+  }
+
+  if (Array.isArray(node)) {
+    out.add(node.length);
+    for (const item of node) collectKnownNumbers(item, out);
+    return out;
+  }
+
+  if (typeof node === "object") {
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      collectKnownNumbers(value, out);
+    }
+    return out;
+  }
+
+  return out;
 }
 
-export type VerifyResult = { ok: true } | { ok: false; badNumbers: ExtractedNumber[] };
+function isKnown(value: number, known: Set<number>): boolean {
+  if (!Number.isFinite(value)) return true;
+  const v = Math.abs(value);
 
-/** A number counts as backed by the data if it's within rounding distance of something the
- *  tools actually returned: 1 cent absolute, or 0.5% relative for larger figures, whichever is
- *  bigger. This covers currency formatting (R1 234.56 vs 1234.5600000001) and percentages
- *  rounded for display (45% vs 44.6) without letting a genuinely wrong number slip through. */
-function isBackedByData(value: number, known: number[]): boolean {
-  const tolerance = Math.max(0.01, Math.abs(value) * 0.005);
-  return known.some((k) => Math.abs(k - value) <= tolerance);
+  // Tiny integers (0-4) are almost always incidental.
+  if (Number.isInteger(value) && v <= 4) return true;
+
+  for (const k of known) {
+    const kk = Math.abs(k);
+    if (v === kk) return true;
+    const scale = Math.max(1, kk);
+    if (Math.abs(kk - v) <= 0.01 * scale) return true;
+    if (Math.round(kk) === Math.round(v)) return true;
+    if (Math.abs(kk * 100 - v) <= 0.5) return true;
+    if (Math.abs(kk / 100 - v) <= 0.5) return true;
+  }
+  return false;
 }
 
-/** 0 and 1 are exempt: they show up constantly in ordinary prose ("no items", "one purchase
- *  order") in ways that don't always map cleanly onto a specific field, and a wrong 0 or 1 is
- *  low-stakes compared to a wrong quantity or rand figure. Everything else is checked. */
-function isExempt(n: ExtractedNumber): boolean {
-  return n.value === 0 || n.value === 1;
-}
+export function verifyAnswer(answerText: string, toolOutputs: unknown[]): CheckResult {
+  const known = new Set<number>();
+  for (const output of toolOutputs) collectKnownNumbers(output, known);
 
-export function verifyAnswer(answerText: string, toolOutputs: unknown[]): VerifyResult {
-  const known = collectKnownNumbers(toolOutputs);
-  const claimed = extractNumbers(answerText);
-  const badNumbers = claimed.filter((n) => !isExempt(n) && !isBackedByData(n.value, known));
-  if (badNumbers.length === 0) return { ok: true };
-  return { ok: false, badNumbers };
+  const numbers = extractNumbersFromText(answerText);
+  const bad: BadNumber[] = [];
+  for (const { value, raw } of numbers) {
+    if (!isKnown(value, known)) bad.push({ value, raw });
+  }
+
+  return bad.length === 0 ? { ok: true } : { ok: false, badNumbers: bad };
 }
