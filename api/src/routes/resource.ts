@@ -1,6 +1,13 @@
 import type { Hono } from "hono";
 import type { ZodObject, ZodType } from "zod";
-import { Id, ListQuery, versioned, type Permission } from "@reef/shared";
+import {
+  Id,
+  ListQuery,
+  lateCaptureProblem,
+  reefToday,
+  versioned,
+  type Permission,
+} from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { parseBody, parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
@@ -33,6 +40,11 @@ type ResourceSpec = {
   /** A column the API fills with the caller's id on create, e.g. `logged_by`. Never the client. */
   stampUser?: string;
   summaries: { list: string; get: string; create: string; update: string; remove: string };
+  /**
+   * The date field of a captured entry. When set, a new entry older than the owner's capture
+   * age limit is refused (T10). Corrections to existing entries are not limited.
+   */
+  captureDate?: string;
   /** Extra refusal reasons for create, beyond the generic validation ones. */
   createRefuses?: string;
 };
@@ -104,6 +116,19 @@ export function resourceRoutes(app: Hono<AppEnv>, registry: Registry, spec: Reso
     },
     async (c) => {
       const body = await parseBody(c, spec.input);
+      if (spec.captureDate) {
+        const fields = body as Record<string, unknown>;
+        // An entry sent without a date is dated today in South Africa. Left to the database,
+        // it would get `current_date` in UTC and land on yesterday between midnight and 02:00.
+        fields[spec.captureDate] ??= reefToday();
+        const date = fields[spec.captureDate] as string;
+        const problem = lateCaptureProblem(date, await c.var.repos.settings.captureMaxAgeDays());
+        if (problem) {
+          throw new ApiError("VALIDATION_FAILED", problem, [
+            { path: spec.captureDate, message: problem },
+          ]);
+        }
+      }
       if (spec.stampUser) (body as Record<string, unknown>)[spec.stampUser] = c.var.user.id;
       const row = await spec.repo(c.var.repos).create(body);
       return ok(c, row, 201);

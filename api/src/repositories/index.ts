@@ -26,6 +26,7 @@ import type {
   RoleRepository,
   Row,
   ScopedRepository,
+  SettingsRepository,
   StockUsageRepository,
   SessionRepository,
   AnalyticsRepository,
@@ -53,4 +54,5 @@ export type Repositories = {
   retention: RetentionRepository;
   notifications: NotificationRepository;
   jobs: JobRepository;
+  settings: SettingsRepository;
 };

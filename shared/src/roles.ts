@@ -61,6 +61,11 @@ export const PERMISSIONS = {
   // Whether the scheduled sweep has been running. The owner's, because a day with no run is a
   // question about whether the system is working rather than about one site.
   "jobs:read": ["owner"],
+
+  // Settings: everyone reads them (the capture forms need the age limit); only the owner
+  // changes them, because they change what every plant may capture.
+  "settings:read": ["owner", "manager", "worker"],
+  "settings:write": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

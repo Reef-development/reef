@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCaptureLimit } from "@/hooks/useCaptureLimit";
 import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
@@ -16,6 +17,7 @@ import { Plus } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/production")({ component: Page });
 
 function Page() {
+  const limit = useCaptureLimit();
   const list = useList<any>("production_logs", "date");
   const mines = useList<any>("mines", "name", true);
   const upsert = useUpsert("production_logs");
@@ -71,7 +73,7 @@ function Page() {
                 <SelectContent>{mines.data?.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
               </Select>
             </Field>
-            <Field label="Date"><Input name="date" type="date" required defaultValue={editing?.date ?? new Date().toISOString().slice(0, 10)} /></Field>
+            <Field label="Date"><Input name="date" type="date" required min={editing ? undefined : limit.earliest} defaultValue={editing?.date ?? limit.today} />{!editing && <p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p>}</Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Shift">
                 <Select value={shift} onValueChange={setShift}>

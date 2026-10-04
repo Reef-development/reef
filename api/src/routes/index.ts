@@ -25,6 +25,7 @@ import { analyticsRoutes } from "./analytics.js";
 import { defineRoute } from "./define.js";
 import { notificationRoutes } from "./notifications.js";
 import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
+import { settingsRoutes } from "./settings.js";
 import { ApiError } from "../http/errors.js";
 
 const UserId = z.string().uuid();
@@ -261,4 +262,5 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   analyticsRoutes(app, registry);
   adminRoutes(app, registry);
   notificationRoutes(app, registry);
+  settingsRoutes(app, registry);
 }

@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { reefToday } from "@reef/shared";
 import { useList } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,7 +36,7 @@ function Page() {
         method: "POST",
         body: JSON.stringify({
           equipment_id: equipId,
-          date: new Date().toISOString().slice(0, 10),
+          date: reefToday(),
           description: desc,
           labour_cost: cost,
           photo_urls,
