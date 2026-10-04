@@ -137,3 +137,60 @@ describe("T6: creating a record does not write history", () => {
     expect(history.rows).toHaveLength(0);
   });
 });
+
+describe("T6: the reason comes back when the history is read", () => {
+  it("returns the reason with the old and new values, newest first", async () => {
+    const { call, id } = await withSite();
+    await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { target_cost_per_ton: 52, version: 1, reason: REASON },
+    });
+    await call("PATCH", `/api/v1/mines/${id}`, {
+      token: "owner-token",
+      body: { team_name: "Bravo", version: 2, reason: NEW_REASON },
+    });
+
+    const res = await call("GET", `/api/v1/history?table=mines&row_id=${id}`, {
+      token: "owner-token",
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.meta.total).toBe(2);
+    expect(body.data[0]).toMatchObject({
+      reason: NEW_REASON,
+      old_values: { team_name: "Alpha" },
+      new_values: { team_name: "Bravo" },
+    });
+    expect(body.data[1].reason).toBe(REASON);
+  });
+
+  it("shows only the record asked for", async () => {
+    const { call, id } = await withSite();
+    const other = await call("POST", "/api/v1/mines", {
+      token: "owner-token",
+      body: { name: "Ogies" },
+    });
+    const otherId = (await other.json()).data.id;
+    await call("PATCH", `/api/v1/mines/${otherId}`, {
+      token: "owner-token",
+      body: { name: "Ogies North", version: 1, reason: REASON },
+    });
+
+    const res = await call("GET", `/api/v1/history?table=mines&row_id=${id}`, {
+      token: "owner-token",
+    });
+    expect((await res.json()).data).toHaveLength(0);
+  });
+
+  it("lets a manager read it, and refuses a worker", async () => {
+    const { call } = await withSite();
+    expect((await call("GET", "/api/v1/history", { token: "manager-token" })).status).toBe(200);
+    expect((await call("GET", "/api/v1/history", { token: "worker-token" })).status).toBe(403);
+  });
+
+  it("answers 400 for a record id that is not an id", async () => {
+    const { call } = await withSite();
+    const res = await call("GET", "/api/v1/history?row_id=nope", { token: "owner-token" });
+    expect(res.status).toBe(400);
+  });
+});

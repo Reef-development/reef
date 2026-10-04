@@ -1,9 +1,15 @@
 import { randomUUID } from "node:crypto";
-import type { ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
+import type { HistoryQuery, ListQuery, Mine, MineInput, MinePatch } from "@reef/shared";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
-import type { HistoryEntry, Page, Repository, UpdateResult } from "../src/repositories/types.js";
+import type {
+  HistoryEntry,
+  HistoryRepository,
+  Page,
+  Repository,
+  UpdateResult,
+} from "../src/repositories/types.js";
 
 /** Yields to other pending requests, so overlapping calls in a test really do interleave. */
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -20,8 +26,16 @@ export const USERS: Record<string, { id: string; roles: string[] }> = {
  * The in-memory stand-in for the history table. Rows are appended, never updated or
  * deleted. Tests read it to assert a change was recorded.
  */
-export class MemoryHistory {
+export class MemoryHistory implements HistoryRepository {
   rows: HistoryEntry[] = [];
+
+  async list(q: HistoryQuery): Promise<Page<HistoryEntry>> {
+    const matching = this.rows
+      .filter((r) => (!q.table || r.table_name === q.table) && (!q.row_id || r.row_id === q.row_id))
+      .reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: matching.slice(from, from + q.pageSize), total: matching.length };
+  }
 
   append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
     const full: HistoryEntry = {
@@ -92,7 +106,7 @@ export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
   }
 
   /**
-   * Mirrors the database trigger: if the reason is missing, throw. The real trigger
+   * Mirrors update_versioned: if the reason is missing, throw. The real procedure
    * raises a check_violation, which the repository translates to a 400, so a fake that
    * just silently accepts an empty reason would hide the exact bug we are guarding
    * against.
@@ -164,6 +178,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       currentUserId = USERS[token]?.id ?? null;
       return {
         roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        history,
         mines,
         ...overrides,
       };

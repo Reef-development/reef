@@ -14,6 +14,18 @@ export const ListQuery = z.object({
 });
 export type ListQuery = z.infer<typeof ListQuery>;
 
+/** Query string for reading the history: newest first, optionally one table or one record. */
+export const HistoryQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  table: z
+    .string()
+    .regex(/^[a-z_]+$/, "Use a table name such as mines")
+    .optional(),
+  row_id: Id.optional(),
+});
+export type HistoryQuery = z.infer<typeof HistoryQuery>;
+
 /** The version a client read. Sent with every update so a stale copy cannot overwrite a newer one. */
 export const Version = z.number().int().positive();
 

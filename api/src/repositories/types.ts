@@ -1,4 +1,6 @@
-import type { ListQuery } from "@reef/shared";
+import type { HistoryQuery, ListQuery } from "@reef/shared";
+
+export type { HistoryQuery };
 
 export type Page<T> = { rows: T[]; total: number };
 
@@ -21,9 +23,8 @@ export interface Repository<Row, Input, Patch> {
   /**
    * Applies the patch only if the stored version still equals `expectedVersion`, and
    * records why the change was made. The row is updated through a stored procedure that
-   * sets the reason on the database session; a trigger reads it and writes the history
-   * row inside the same transaction. If the reason is missing, the whole thing rolls
-   * back and the caller sees the failure.
+   * sets the reason on the transaction; a trigger reads it and writes the history row
+   * inside the same transaction. A missing reason is refused before anything changes.
    */
   update(
     id: string,
@@ -55,3 +56,8 @@ export type HistoryEntry = {
   new_values: Record<string, unknown>;
   version: number;
 };
+
+export interface HistoryRepository {
+  /** Changes newest first, optionally for one table or one record. */
+  list(query: HistoryQuery): Promise<Page<HistoryEntry>>;
+}

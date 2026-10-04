@@ -1,7 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config } from "../config.js";
 import type { Repositories } from "../repositories/index.js";
-import { SupabaseRoleRepository, SupabaseTableRepository } from "../repositories/supabase.js";
+import {
+  SupabaseHistoryRepository,
+  SupabaseRoleRepository,
+  SupabaseTableRepository,
+} from "../repositories/supabase.js";
 
 /**
  * Builds the repositories for one request, carrying the caller's own token. The database
@@ -16,6 +20,7 @@ export function supabaseRepositories(config: Config) {
     });
     return {
       roles: new SupabaseRoleRepository(db),
+      history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
     };
   };
