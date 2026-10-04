@@ -1,26 +1,35 @@
 import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
-export async function uploadPhotos(files: FileList | File[], folder: string): Promise<string[]> {
-  const arr = Array.from(files);
-  if (!arr.length) return [];
-  const { data: userRes } = await supabase.auth.getUser();
-  const uid = userRes.user?.id ?? "anon";
-  const urls: string[] = [];
-  for (const file of arr) {
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const path = `${folder}/${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage.from("reef-photos").upload(path, file, {
-      contentType: file.type || "image/jpeg",
-      upsert: false,
+type Folder = "repairs" | "fuel" | "downtime";
+const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+
+/**
+ * Uploads photos and returns their stored paths. The API chooses each file's name, under the
+ * signed-in person's own folder, and hands back a one-time upload link; the file then goes
+ * straight to storage, so large photos do not pass through the API.
+ */
+export async function uploadPhotos(files: FileList | File[], folder: Folder): Promise<string[]> {
+  const paths: string[] = [];
+  for (const file of Array.from(files)) {
+    const contentType = file.type || "image/jpeg";
+    if (!ALLOWED.includes(contentType)) throw new Error(`${file.name} is not a JPEG, PNG or WebP photo`);
+    const { data } = await api<{ path: string; token: string }>("/api/v1/photos/upload-url", {
+      method: "POST",
+      body: JSON.stringify({ folder, content_type: contentType }),
     });
+    const { error } = await supabase.storage.from("reef-photos").uploadToSignedUrl(data.path, data.token, file, { contentType });
     if (error) throw error;
-    urls.push(path);
+    paths.push(data.path);
   }
-  return urls;
+  return paths;
 }
 
+/** A link to view a stored photo for an hour, or null if it is missing or not the caller's to see. */
 export async function signedPhotoUrl(path: string): Promise<string | null> {
-  const { data, error } = await supabase.storage.from("reef-photos").createSignedUrl(path, 3600);
-  if (error) return null;
-  return data.signedUrl;
+  try {
+    return (await api<{ url: string }>(`/api/v1/photos/view?path=${encodeURIComponent(path)}`)).data.url;
+  } catch {
+    return null;
+  }
 }

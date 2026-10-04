@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useList, ZAR } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,20 +31,17 @@ function Page() {
     mutationFn: async () => {
       if (!equipId && !label.trim()) throw new Error("Pick a vehicle or type a label");
       if (litres <= 0) throw new Error("Enter litres pumped");
-      const { data: userRes } = await supabase.auth.getUser();
       const photo_urls = photos ? await uploadPhotos(photos, "fuel") : [];
-      const { error } = await supabase.from("fuel_slips").insert({
+      // The total and who logged it are worked out on the server, so neither is sent.
+      await api("/api/v1/fuel-slips", { method: "POST", body: JSON.stringify({
         equipment_id: equipId || null,
         mine_id: mineId || null,
         vehicle_label: label.trim() || null,
         litres,
         cost_per_litre: cpl,
-        total_cost: Number((litres * cpl).toFixed(2)),
         odometer: odo ? Number(odo) : null,
         photo_urls,
-        logged_by: userRes.user?.id ?? null,
-      });
-      if (error) throw error;
+      }) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["fuel_slips"] });

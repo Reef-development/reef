@@ -21,6 +21,22 @@ export function highestRole(held: readonly string[]): Role | null {
 export const PERMISSIONS = {
   "mines:read": ["owner", "manager", "worker"],
   "mines:write": ["owner", "manager"],
+
+  // Daily operations. Everyone captures; changing or deleting a captured entry is for the
+  // people accountable for the site. These mirror the row-level security in the migrations.
+  "production:read": ["owner", "manager", "worker"],
+  "production:create": ["owner", "manager", "worker"],
+  "production:write": ["owner", "manager"],
+  "maintenance:read": ["owner", "manager", "worker"],
+  "maintenance:create": ["owner", "manager", "worker"],
+  "maintenance:write": ["owner", "manager"],
+  "fuel:read": ["owner", "manager", "worker"],
+  "fuel:create": ["owner", "manager", "worker"],
+  "fuel:write": ["owner", "manager"],
+  "fuel:delete": ["owner"],
+  "stock:use": ["owner", "manager", "worker"],
+  "photos:upload": ["owner", "manager", "worker"],
+  "photos:view": ["owner", "manager", "worker"],
   "sessions:manage": ["owner"],
   "stock:read": ["owner", "manager", "worker"],
   "stock:write": ["owner", "manager"],

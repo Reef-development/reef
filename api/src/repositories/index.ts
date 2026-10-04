@@ -1,7 +1,13 @@
 import type {
+  FuelInput,
+  FuelPatch,
+  MaintenanceInput,
+  MaintenancePatch,
   Mine,
   MineInput,
   MinePatch,
+  ProductionInput,
+  ProductionPatch,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderPatch,
@@ -14,9 +20,13 @@ import type {
 } from "@reef/shared";
 import type {
   HistoryRepository,
+  MaintenancePartsRepository,
+  PhotoStore,
   Repository,
   RoleRepository,
+  Row,
   ScopedRepository,
+  StockUsageRepository,
   SessionRepository,
   AnalyticsRepository,
   JobRepository,
@@ -30,6 +40,12 @@ export type Repositories = {
   sessions: SessionRepository;
   history: HistoryRepository;
   mines: Repository<Mine, MineInput, MinePatch>;
+  production: Repository<Row, ProductionInput, ProductionPatch>;
+  fuel: Repository<Row, FuelInput, FuelPatch>;
+  maintenance: Repository<Row, MaintenanceInput, MaintenancePatch>;
+  maintenanceParts: MaintenancePartsRepository;
+  stockUsage: StockUsageRepository;
+  photos: PhotoStore;
   stock: ScopedRepository<Stock, StockInput, StockPatch>;
   stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;
   purchaseOrders: ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>;

@@ -63,7 +63,8 @@ export async function migratedDb(upTo?: string): Promise<Db> {
     .filter((f) => (upTo ? f < upTo : true))
     .sort()) {
     try {
-      await pg.exec(readFileSync(MIGRATIONS + file, "utf8"));
+      // A byte-order mark is invisible in an editor but a syntax error to Postgres.
+      await pg.exec(readFileSync(MIGRATIONS + file, "utf8").replace(/^\uFEFF/, ""));
     } catch (err) {
       throw new Error(`Migration ${file} failed: ${(err as Error).message}`);
     }

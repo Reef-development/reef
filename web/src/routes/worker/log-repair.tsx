@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useList } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,17 +27,18 @@ function Page() {
     mutationFn: async () => {
       if (!equipId) throw new Error("Select equipment");
       if (!desc) throw new Error("Enter a description");
-      const { data: userRes } = await supabase.auth.getUser();
       const photo_urls = photos ? await uploadPhotos(photos, "repairs") : [];
-      const { error } = await supabase.from("maintenance_logs").insert({
-        equipment_id: equipId,
-        date: new Date().toISOString().slice(0, 10),
-        description: desc,
-        labour_cost: cost,
-        photo_urls,
-        logged_by: userRes.user?.id ?? null,
+      // The API records who logged it from the sign-in, so the screen does not send it.
+      await api("/api/v1/maintenance-logs", {
+        method: "POST",
+        body: JSON.stringify({
+          equipment_id: equipId,
+          date: new Date().toISOString().slice(0, 10),
+          description: desc,
+          labour_cost: cost,
+          photo_urls,
+        }),
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });

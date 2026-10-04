@@ -36,7 +36,7 @@ describe("seeded records with hand-written ids", () => {
     const { call } = withSeededSite();
     const patched = await call("PATCH", `/api/v1/mines/${SEEDED_SITE}`, {
       token: "owner-token",
-      body: { target_cost_per_ton: 225, version: 1 },
+      body: { target_cost_per_ton: 225, version: 1, reason: "New haulage contract" },
     });
     expect(patched.status).toBe(200);
     expect(

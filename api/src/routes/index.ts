@@ -19,6 +19,7 @@ import type { AppEnv } from "../app.js";
 import { parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
 import type { Registry } from "../registry.js";
+import { dailyOpsRoutes } from "./daily-ops.js";
 import { adminRoutes } from "./admin.js";
 import { analyticsRoutes } from "./analytics.js";
 import { defineRoute } from "./define.js";
@@ -196,6 +197,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
   });
 
+  dailyOpsRoutes(app, registry);
   scopedResourceRoutes(app, registry, {
     name: "stock",
     noun: "stock item",

@@ -27,16 +27,20 @@ import type {
   HistoryRepository,
   JobRepository,
   Leaver,
+  MaintenancePartsRepository,
   NotificationDraft,
   NotificationRepository,
   Page,
   Period,
+  PhotoStore,
   ProductionTotals,
   Repository,
   RetentionRepository,
+  Row,
   ScopedRepository,
   ServiceSweepRepository,
   SessionRepository,
+  StockUsageRepository,
   UpdateResult,
   UserContext,
   UserSession,
@@ -82,6 +86,12 @@ export const USERS: Record<
   },
 };
 
+type AnyRow = { id: string; version: number } & Record<string, unknown>;
+
+/**
+ * The in-memory stand-in for the history table. Rows are appended, never updated or
+ * deleted. Tests read it to assert a change was recorded.
+ */
 export class MemoryHistory implements HistoryRepository {
   rows: HistoryEntry[] = [];
 
@@ -104,19 +114,120 @@ export class MemoryHistory implements HistoryRepository {
   }
 }
 
-function diff(
-  before: Record<string, unknown>,
-  after: Record<string, unknown>,
-): { old: Record<string, unknown>; next: Record<string, unknown> } {
+/**
+ * The columns that differ between `before` and `after`, leaving out version and updated_at,
+ * which change on every save. Mirrors the diff in the database trigger.
+ */
+function diff(before: Record<string, unknown>, after: Record<string, unknown>) {
   const old: Record<string, unknown> = {};
   const next: Record<string, unknown> = {};
   for (const key of Object.keys(after)) {
+    if (key === "version" || key === "updated_at") continue;
     if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
       old[key] = before[key];
       next[key] = after[key];
     }
   }
   return { old, next };
+}
+
+/** Where a table records its changes, standing in for the history trigger (T6). */
+type Audit = { table: string; history: MemoryHistory; actor: () => string | null };
+
+/**
+ * An in-memory table that behaves like the database where the routes can tell the difference:
+ * versions rise on update, the version check and the write happen together, and `derive` stands
+ * in for the triggers that work out totals. The SQL itself is tested in test/db.
+ */
+export class MemoryTable<R extends AnyRow> implements Repository<R, object, object> {
+  rows: R[] = [];
+  audit?: Audit;
+
+  constructor(
+    private readonly defaults: Partial<R> = {},
+    private readonly derive: (row: R) => void = () => {},
+  ) {}
+
+  async list(q: ListQuery): Promise<Page<R>> {
+    await tick();
+    const key = (q.sort ?? "created_at") as keyof R;
+    const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
+    if (q.order === "desc") sorted.reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: sorted.slice(from, from + q.pageSize), total: this.rows.length };
+  }
+  async get(id: string) {
+    await tick();
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
+  async create(input: object) {
+    const now = new Date().toISOString();
+    const row = {
+      id: randomUUID(),
+      version: 1,
+      created_at: now,
+      updated_at: now,
+      ...this.defaults,
+      ...input,
+    } as unknown as R;
+    this.derive(row);
+    this.rows.push(row);
+    return { ...row };
+  }
+  /**
+   * Like the database: the version check and the write happen together, with no await between.
+   * A missing reason is refused, as update_versioned refuses it, so a fake cannot hide that bug.
+   */
+  async update(
+    id: string,
+    patch: object,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<UpdateResult<R>> {
+    await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
+    const row = this.rows.find((r) => r.id === id);
+    if (!row) return { status: "missing" };
+    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    const before = { ...row };
+    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
+    this.derive(row);
+    if (this.audit) {
+      const { old, next } = diff(before, row);
+      if (Object.keys(next).length > 0) {
+        this.audit.history.append({
+          table_name: this.audit.table,
+          row_id: id,
+          changed_by: this.audit.actor() ?? "00000000-0000-0000-0000-000000000000",
+          reason: reason.trim(),
+          plant: typeof row.plant === "string" ? row.plant : null,
+          old_values: old,
+          new_values: next,
+          version: row.version,
+        });
+      }
+    }
+    return { status: "updated", row: { ...row } };
+  }
+  async remove(id: string) {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((r) => r.id !== id);
+    return this.rows.length < before;
+  }
+}
+
+export class MemoryMines extends MemoryTable<Mine & AnyRow> {
+  constructor() {
+    super({
+      client_id: null,
+      location: null,
+      team_name: null,
+      target_cost_per_ton: null,
+      active: true,
+    });
+  }
 }
 
 function plantForCreate(input: { plant: string }, user: UserContext): string {
@@ -128,93 +239,6 @@ function plantForCreate(input: { plant: string }, user: UserContext): string {
     );
   }
   return user.plant;
-}
-
-export class MemoryMines implements Repository<Mine, MineInput, MinePatch> {
-  rows: Mine[] = [];
-
-  constructor(
-    private readonly history: MemoryHistory,
-    private readonly currentUserId: () => string | null,
-  ) {}
-
-  async list(q: ListQuery): Promise<Page<Mine>> {
-    await tick();
-    const key = (q.sort ?? "name") as keyof Mine;
-    const sorted = [...this.rows].sort((a, b) => String(a[key]).localeCompare(String(b[key])));
-    if (q.order === "desc") sorted.reverse();
-
-    const from = (q.page - 1) * q.pageSize;
-
-    return {
-      rows: sorted.slice(from, from + q.pageSize),
-      total: this.rows.length,
-    };
-  }
-
-  async get(id: string) {
-    await tick();
-    return this.rows.find((r) => r.id === id) ?? null;
-  }
-
-  async create(input: MineInput) {
-    const now = new Date().toISOString();
-
-    const row: Mine = {
-      id: randomUUID(),
-      client_id: null,
-      location: null,
-      team_name: null,
-      target_cost_per_ton: null,
-      active: true,
-      version: 1,
-      created_at: now,
-      updated_at: now,
-      ...input,
-    };
-
-    this.rows.push(row);
-    return row;
-  }
-  async update(
-    id: string,
-    patch: MinePatch,
-    expectedVersion: number,
-    reason: string,
-  ): Promise<UpdateResult<Mine>> {
-    await tick();
-    if (!reason || reason.trim() === "") {
-      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
-    }
-    const row = this.rows.find((r) => r.id === id);
-
-    if (!row) return { status: "missing" };
-    if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
-    const before = { ...row };
-    Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
-    const after = { ...row };
-    const { old, next } = diff(
-      before as unknown as Record<string, unknown>,
-      after as unknown as Record<string, unknown>,
-    );
-    const actor = this.currentUserId() ?? "00000000-0000-0000-0000-000000000000";
-    this.history.append({
-      table_name: "mines",
-      row_id: id,
-      changed_by: actor,
-      reason,
-      plant: null,
-      old_values: old,
-      new_values: next,
-      version: after.version,
-    });
-    return { status: "updated", row: after };
-  }
-  async remove(id: string) {
-    const before = this.rows.length;
-    this.rows = this.rows.filter((r) => r.id !== id);
-    return this.rows.length < before;
-  }
 }
 
 class MemorySessions implements SessionRepository {
@@ -495,6 +519,53 @@ export class MemoryPurchaseOrder implements ScopedRepository<
   }
 }
 
+/** Stock items the fakes know about, with a unit cost for pricing parts. */
+export const STOCK = {
+  bearing: { id: "00000000-0000-4000-8000-00000000b001", unit_cost: 150, qty_on_hand: 10 },
+};
+
+export class MemoryMaintenance extends MemoryTable<AnyRow> {
+  parts: (Row & { maintenance_id: string; qty: number; unit_cost: number })[] = [];
+
+  constructor() {
+    super({ labour_cost: 0, parts_cost: 0, photo_urls: [] }, (r) => {
+      r.total_cost = Number(r.labour_cost ?? 0) + Number(r.parts_cost ?? 0);
+    });
+  }
+
+  override async create(input: object) {
+    const { parts = [], ...log } = input as {
+      parts?: { stock_item_id: string; qty: number; unit_cost?: number }[];
+    };
+    const row = await super.create(log);
+    for (const p of parts) this.addPart(row.id, p);
+    return (await this.get(row.id))!;
+  }
+
+  addPart(logId: string, p: { stock_item_id: string; qty: number; unit_cost?: number }) {
+    const known = Object.values(STOCK).find((s) => s.id === p.stock_item_id);
+    if (!known) throw new ApiError("NOT_FOUND", "That stock item does not exist");
+    const part = {
+      id: randomUUID(),
+      maintenance_id: logId,
+      ...p,
+      unit_cost: p.unit_cost || known.unit_cost,
+    };
+    this.parts.push(part);
+    this.refresh(logId);
+    return part;
+  }
+
+  refresh(logId: string) {
+    const log = this.rows.find((r) => r.id === logId);
+    if (!log) return;
+    log.parts_cost = this.parts
+      .filter((p) => p.maintenance_id === logId)
+      .reduce((s, p) => s + p.qty * p.unit_cost, 0);
+    log.total_cost = Number(log.labour_cost ?? 0) + Number(log.parts_cost);
+  }
+}
+
 /**
  * Figures held in memory, so the money arithmetic and the assistant can be tested without a
  * database. Every method takes the same period the real one does and filters on it, because a
@@ -687,16 +758,57 @@ export class MemorySweep implements ServiceSweepRepository {
 
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
+  // The signed-in user of the current request, which the history records as the actor, the
+  // way the trigger reads auth.uid().
+  let currentUserId: string | null = null;
+  const actor = () => currentUserId;
+  const mines = new MemoryMines();
+  const production = new MemoryTable<AnyRow>({ tons_produced: 0 });
+  const fuel = new MemoryTable<AnyRow>({ photo_urls: [] }, (r) => {
+    r.total_cost = Math.round(Number(r.litres ?? 0) * Number(r.cost_per_litre ?? 0) * 100) / 100;
+  });
+  const maintenance = new MemoryMaintenance();
   const stock = new MemoryStock();
   const stockLevels = new MemoryStockLevel();
   const purchaseOrders = new MemoryPurchaseOrder();
+  mines.audit = { table: "mines", history, actor };
+  production.audit = { table: "production_logs", history, actor };
+  fuel.audit = { table: "fuel_slips", history, actor };
+  maintenance.audit = { table: "maintenance_logs", history, actor };
+  const usage: { stock_item_id: string; qty: number }[] = [];
+  const photoRequests: string[] = [];
   const analytics = new MemoryAnalytics();
   const retention = new MemoryRetention();
   const notifications = new MemoryNotifications();
   const jobs = new MemoryJobs();
 
-  let currentUserId: string | null = null;
-  const mines = new MemoryMines(history, () => currentUserId);
+  const maintenanceParts: MaintenancePartsRepository = {
+    forLog: async (logId) => maintenance.parts.filter((p) => p.maintenance_id === logId),
+    add: async (logId, part) => maintenance.addPart(logId, part),
+    remove: async (partId) => {
+      const part = maintenance.parts.find((p) => p.id === partId);
+      if (!part) return false;
+      maintenance.parts = maintenance.parts.filter((p) => p.id !== partId);
+      maintenance.refresh(part.maintenance_id);
+      return true;
+    },
+  };
+  const stockUsage: StockUsageRepository = {
+    recordUsage: async (stock_item_id, qty) => {
+      const item = Object.values(STOCK).find((s) => s.id === stock_item_id);
+      if (!item) throw new ApiError("NOT_FOUND", "That stock item does not exist");
+      usage.push({ stock_item_id, qty });
+      return { ...item, qty_on_hand: item.qty_on_hand - qty };
+    },
+  };
+  const photos: PhotoStore = {
+    uploadUrl: async (path) => {
+      photoRequests.push(path);
+      return { signedUrl: `https://storage.test/upload/${path}`, token: "upload-token" };
+    },
+    viewUrl: async (path) =>
+      path.includes("forbidden") ? null : `https://storage.test/view/${path}`,
+  };
 
   const sessionRows: UserSession[] = [];
   const logged: unknown[] = [];
@@ -727,6 +839,12 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
         history,
         mines,
+        production,
+        fuel,
+        maintenance,
+        maintenanceParts,
+        stockUsage,
+        photos,
         stock,
         stockLevels,
         purchaseOrders,
@@ -766,11 +884,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   return {
     app,
     registry,
+    history,
     mines,
+    production,
+    fuel,
+    maintenance,
+    usage,
+    photoRequests,
     stock,
     stockLevels,
     purchaseOrders,
-    history,
     sessionRows,
     analytics,
     retention,

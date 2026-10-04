@@ -43,6 +43,32 @@ export interface RoleRepository {
   plantFor(userId: string): Promise<string | null>;
 }
 
+/** A row as stored. Daily-ops rows are passed through as the database returns them. */
+export type Row = Record<string, unknown> & { id: string };
+
+export interface MaintenancePartsRepository {
+  forLog(logId: string): Promise<Row[]>;
+  /** Adds a part to an existing repair; stock and the repair's cost update in the database. */
+  add(
+    logId: string,
+    part: { stock_item_id: string; qty: number; unit_cost?: number },
+  ): Promise<Row>;
+  /** Removes a part; it goes back on the shelf. False if there was no such part. */
+  remove(partId: string): Promise<boolean>;
+}
+
+export interface StockUsageRepository {
+  /** Takes stock off in one database step and drafts a reorder if needed. Returns the item. */
+  recordUsage(stockItemId: string, qty: number): Promise<Row>;
+}
+
+export interface PhotoStore {
+  /** A one-time link the browser uploads the file to directly. */
+  uploadUrl(path: string): Promise<{ signedUrl: string; token: string }>;
+  /** A link to view a stored photo for an hour, or null if the caller may not see it. */
+  viewUrl(path: string): Promise<string | null>;
+}
+
 export type UserSession = {
   id: string;
   user_id: string;
