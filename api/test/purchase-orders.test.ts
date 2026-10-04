@@ -66,17 +66,13 @@ describe("T14: purchase orders are management documents", () => {
     // Owner sees both.
     const ownerRes = await call("GET", "/api/v1/purchase-orders", { token: "owner-token" });
     expect(ownerRes.status).toBe(200);
-    const ownerPlants = (await ownerRes.json()).data.map(
-      (p: { plant: string }) => p.plant,
-    ).sort();
+    const ownerPlants = (await ownerRes.json()).data.map((p: { plant: string }) => p.plant).sort();
     expect(ownerPlants).toEqual(["A", "B"]);
 
     // Manager at plant A sees only A.
     const mgrRes = await call("GET", "/api/v1/purchase-orders", { token: "manager-token" });
     expect(mgrRes.status).toBe(200);
-    const mgrPlants = (await mgrRes.json()).data.map(
-      (p: { plant: string }) => p.plant,
-    );
+    const mgrPlants = (await mgrRes.json()).data.map((p: { plant: string }) => p.plant);
     expect(mgrPlants).toEqual(["A"]);
   });
 

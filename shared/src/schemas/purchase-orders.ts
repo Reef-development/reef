@@ -34,12 +34,7 @@ export type PurchaseOrderInput = z.infer<typeof PurchaseOrderInput>;
 export type PurchaseOrderPatch = z.infer<typeof PurchaseOrderPatch>;
 export type PurchaseOrderUpdate = z.infer<typeof PurchaseOrderUpdate>;
 
-export type PurchaseOrderStatus =
-  | "draft"
-  | "approved"
-  | "ordered"
-  | "received"
-  | "cancelled";
+export type PurchaseOrderStatus = "draft" | "approved" | "ordered" | "received" | "cancelled";
 
 export type PurchaseOrder = {
   id: string;

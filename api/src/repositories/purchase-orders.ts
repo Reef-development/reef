@@ -46,9 +46,11 @@ function plantForCreate(input: { plant: string }, user: UserContext): string {
   return user.plant;
 }
 
-export class SupabasePurchaseOrderRepository
-  implements ScopedRepository<PurchaseOrder, PurchaseOrderInput, PurchaseOrderPatch>
-{
+export class SupabasePurchaseOrderRepository implements ScopedRepository<
+  PurchaseOrder,
+  PurchaseOrderInput,
+  PurchaseOrderPatch
+> {
   constructor(private readonly db: SupabaseClient) {}
 
   async list(q: ListQuery, user: UserContext): Promise<Page<PurchaseOrder>> {

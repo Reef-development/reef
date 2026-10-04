@@ -41,9 +41,11 @@ function plantForCreate(input: { plant: string }, user: UserContext): string {
   return user.plant;
 }
 
-export class SupabaseStockLevelRepository
-  implements ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>
-{
+export class SupabaseStockLevelRepository implements ScopedRepository<
+  StockLevel,
+  StockLevelInput,
+  StockLevelPatch
+> {
   constructor(private readonly db: SupabaseClient) {}
 
   async list(q: ListQuery, user: UserContext): Promise<Page<StockLevel>> {
