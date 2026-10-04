@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCaptureLimit } from "@/hooks/useCaptureLimit";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
@@ -37,6 +39,7 @@ function Page() {
   const equipment = useList<any>("equipment", "name", true);
   const employees = useList<any>("employees", "full_name", true);
   const upsert = useUpsert("fuel_slips");
+  const reason = useChangeReason();
   const remove = useRemove("fuel_slips");
 
   const [open, setOpen] = useState(false);
@@ -59,11 +62,17 @@ function Page() {
     setLitres(Number(r.litres ?? 0)); setCpl(Number(r.cost_per_litre ?? 0)); setOpen(true);
   };
 
+  const once = useOneAtATime();
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
+    // A double tap must not save twice: the second submit is ignored while the first is in flight.
+    await once(async () => {
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id, version: editing.version } : {}),
+      ...(editing?.id ? { id: editing.id, version: editing.version, changeReason: why } : {}),
       date: f.get("date"),
       slip_no: f.get("slip_no") || null,
       mine_id: mineId === "none" ? null : mineId,
@@ -78,6 +87,7 @@ function Page() {
       notes: f.get("notes") || null,
     });
     setOpen(false);
+    }).catch(() => {});
   };
 
   const equipName = (id: string | null) => equipment.data?.find((e: any) => e.id === id)?.name ?? null;
@@ -145,7 +155,7 @@ function Page() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={filterEquip} onValueChange={setFilterEquip}>
-          <SelectTrigger className="w-56"><SelectValue placeholder="All vehicles" /></SelectTrigger>
+          <SelectTrigger className="w-56" aria-label="Filter by vehicle"><SelectValue placeholder="All vehicles" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All vehicles / tools</SelectItem>
             {equipment.data?.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
@@ -207,7 +217,8 @@ function Page() {
               </Select>
             </Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
-            <Button type="submit" className="w-full">Save</Button>
+            {editing && <ReasonField reason={reason} />}
+            <Button type="submit" className="w-full" disabled={upsert.isPending}>{upsert.isPending ? "Saving…" : "Save"}</Button>
           </form>
         </DialogContent>
       </Dialog>

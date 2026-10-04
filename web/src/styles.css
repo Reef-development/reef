@@ -117,7 +117,8 @@
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  /* Dark text on the light dark-theme red: white on it was 2.76:1, below the 4.5:1 minimum (T20). */
+  --destructive-foreground: oklch(0.2 0.03 25);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
