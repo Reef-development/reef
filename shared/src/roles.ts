@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   "stock:use": ["owner", "manager", "worker"],
   "photos:upload": ["owner", "manager", "worker"],
   "photos:view": ["owner", "manager", "worker"],
+  "sessions:manage": ["owner"],
   "stock:read": ["owner", "manager", "worker"],
   "stock:write": ["owner", "manager"],
   "po:read": ["owner", "manager"],
@@ -61,7 +62,6 @@ export const PERMISSIONS = {
   // question about whether the system is working rather than about one site.
   "jobs:read": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
-
 export type Permission = keyof typeof PERMISSIONS;
 
 export function can(role: Role | null, permission: Permission): boolean {

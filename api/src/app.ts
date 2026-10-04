@@ -22,8 +22,8 @@ export type Deps = {
 export type AppEnv = {
   Variables: {
     deps: Deps;
-    /** The caller. `plant` is null for the owner, who sees every plant. */
-    user: { id: string; role: Role | null; plant: string | null };
+    /** The caller. `plant` is null for the owner, who sees every plant. `sessionId` is the sign-in (T12). */
+    user: { id: string; role: Role | null; plant: string | null; sessionId: string };
     repos: Repositories;
   };
 };

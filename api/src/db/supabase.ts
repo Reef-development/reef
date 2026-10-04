@@ -15,6 +15,7 @@ import {
   SupabaseJobRepository,
   SupabaseNotificationRepository,
   SupabaseRetentionRepository,
+  SupabaseSessionRepository,
   SupabaseServiceSweepRepository,
   SupabaseTableRepository,
 } from "../repositories/supabase.js";
@@ -33,6 +34,7 @@ export function supabaseRepositories(config: Config) {
     });
     return {
       roles: new SupabaseRoleRepository(db),
+      sessions: new SupabaseSessionRepository(db),
       history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
       production: new SupabaseTableRepository(db, "production_logs", "date"),

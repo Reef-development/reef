@@ -27,6 +27,7 @@ import type {
   Row,
   ScopedRepository,
   StockUsageRepository,
+  SessionRepository,
   AnalyticsRepository,
   JobRepository,
   NotificationRepository,
@@ -36,6 +37,7 @@ import type {
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {
   roles: RoleRepository;
+  sessions: SessionRepository;
   history: HistoryRepository;
   mines: Repository<Mine, MineInput, MinePatch>;
   production: Repository<Row, ProductionInput, ProductionPatch>;
