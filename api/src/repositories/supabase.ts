@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { JobRun, ListQuery, Notification } from "@reef/shared";
+import type { JobRun, ListQuery, Notification, Role, UserSummary } from "@reef/shared";
 import type { Machine } from "../services/service-due.js";
+import { DEFAULT_CAPTURE_MAX_AGE_DAYS } from "@reef/shared";
 import { ApiError } from "../http/errors.js";
 import type {
   AnalyticsRepository,
@@ -21,9 +22,12 @@ import type {
   RoleRepository,
   Row,
   SessionRepository,
+  Setting,
+  SettingsRepository,
   StockUsageRepository,
   ServiceSweepRepository,
   UpdateResult,
+  UserRepository,
   UserSession,
 } from "./types.js";
 
@@ -42,13 +46,18 @@ function translate(err: PgError): ApiError {
       );
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
-    case "22023":
+    case "RF422":
       return new ApiError("VALIDATION_FAILED", err.message);
-    case "RF404":
-      return new ApiError("NOT_FOUND", "That stock item does not exist");
     case "23514":
       // update_versioned raises this when the reason is missing.
       return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    // Raised by the database functions with a message written for the person reading it.
+    case "22023":
+      return new ApiError("VALIDATION_FAILED", err.message);
+    case "RF404":
+      return new ApiError("NOT_FOUND", err.message);
+    case "RF409":
+      return new ApiError("CONFLICT", err.message);
     default:
       return new ApiError("INTERNAL", err.message);
   }
@@ -294,6 +303,34 @@ export class SupabaseHistoryRepository implements HistoryRepository {
       .range(from, from + q.pageSize - 1);
     if (error) throw translate(error);
     return { rows: (data ?? []) as HistoryEntry[], total: count ?? 0 };
+  }
+}
+
+/**
+ * The owner's user list and role changes, through list_users and set_user_role. Both check in
+ * the database that the caller is an owner, so a missed check in the API still cannot leak or
+ * change anyone's account.
+ */
+export class SupabaseUserRepository implements UserRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async list(): Promise<UserSummary[]> {
+    const { data, error } = await this.db.rpc("list_users");
+    if (error) throw translate(error);
+    return (data ?? []) as UserSummary[];
+  }
+
+  async setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null> {
+    const { data, error } = await this.db.rpc("set_user_role", {
+      _user: userId,
+      _role: role,
+      _reason: reason,
+    });
+    if (error) {
+      if (error.code === "RF404") return null;
+      throw translate(error);
+    }
+    return ((data ?? []) as UserSummary[])[0] ?? null;
   }
 }
 
@@ -671,5 +708,43 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
       .select("id");
     if (error) throw translate(error);
     return (data ?? []).length;
+  }
+}
+
+export class SupabaseSettings implements SettingsRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async list(): Promise<Setting[]> {
+    const { data, error } = await this.db
+      .from("settings")
+      .select("key, value, description, updated_at")
+      .order("key");
+    if (error) throw translate(error);
+    return (data ?? []) as Setting[];
+  }
+
+  async captureMaxAgeDays(): Promise<number> {
+    const { data, error } = await this.db
+      .from("settings")
+      .select("value")
+      .eq("key", "capture_max_age_days")
+      .maybeSingle();
+    // Before the settings migration is applied there is no table yet. Capture keeps working on
+    // the documented default rather than failing outright; any other error is still an error.
+    if (error && (error.code === "42P01" || error.code === "PGRST205"))
+      return DEFAULT_CAPTURE_MAX_AGE_DAYS;
+    if (error) throw translate(error);
+    return typeof data?.value === "number" ? data.value : DEFAULT_CAPTURE_MAX_AGE_DAYS;
+  }
+
+  async set(key: string, value: unknown, by: string): Promise<Setting | null> {
+    const { data, error } = await this.db
+      .from("settings")
+      .update({ value, updated_by: by })
+      .eq("key", key)
+      .select("key, value, description, updated_at")
+      .maybeSingle();
+    if (error) throw translate(error);
+    return (data as Setting) ?? null;
   }
 }

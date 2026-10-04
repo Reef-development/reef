@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCaptureLimit } from "@/hooks/useCaptureLimit";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useRemove, ZAR, NUM } from "@/lib/reef-db";
 import { STOCK_KEY, useStockOnHand } from "@/hooks/useStock";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/maintenance")({ component:
 type PartRow = { stock_item_id: string; qty: number };
 
 function Page() {
+  const limit = useCaptureLimit();
   const list = useList<any>("maintenance_logs", "date");
   const equipment = useList<any>("equipment", "name", true);
   const stock = useStockOnHand();
@@ -89,7 +91,7 @@ function Page() {
                   <SelectContent>{equipment.data?.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Date"><Input name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
+              <Field label="Date"><Input name="date" type="date" required min={limit.earliest} max={limit.today} defaultValue={limit.today} /><p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p></Field>
             </div>
             <Field label="Description"><Input name="description" required placeholder="What was repaired" /></Field>
             <div className="grid grid-cols-3 gap-3">

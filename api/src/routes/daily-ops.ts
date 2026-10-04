@@ -38,6 +38,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
     read: "production:read",
     create: "production:create",
     write: "production:write",
+    captureDate: "date",
     summaries: {
       list: "Lists tonnage captured per site and shift, newest first by default. Feeds the cost-per-ton figures.",
       get: "Returns one production entry.",
@@ -47,7 +48,8 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
         "Corrects a production entry. Managers and owners only, because it changes cost per ton after the fact.",
       remove: "Deletes a production entry captured in error. Managers and owners only.",
     },
-    createRefuses: "A negative tonnage or a site id that is not a UUID.",
+    createRefuses:
+      "A negative tonnage or a site id that is not a UUID. An entry dated more than the owner's capture limit ago (60 days unless changed).",
   });
 
   resourceRoutes(app, registry, {
@@ -62,6 +64,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
     write: "fuel:write",
     remove: "fuel:delete",
     stampUser: "logged_by",
+    captureDate: "date",
     summaries: {
       list: "Lists fuel slips, newest first by default.",
       get: "Returns one fuel slip.",
@@ -71,7 +74,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       remove: "Deletes a fuel slip. Owners only, because slips are evidence for fuel spend.",
     },
     createRefuses:
-      "Zero litres, a total_cost field, a photo path this system did not issue, or neither a vehicle nor a label.",
+      "Zero litres, a total_cost field, a photo path this system did not issue, or neither a vehicle nor a label. An entry dated more than the owner's capture limit ago (60 days unless changed).",
   });
 
   resourceRoutes(app, registry, {
@@ -84,6 +87,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
     read: "maintenance:read",
     create: "maintenance:create",
     write: "maintenance:write",
+    captureDate: "date",
     summaries: {
       list: "Lists repairs, newest first by default, with labour, parts and total cost.",
       get: "Returns one repair.",
@@ -94,7 +98,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       remove: "Deletes a repair logged in error. Managers and owners only.",
     },
     createRefuses:
-      "A missing description or equipment, a cost field (costs are worked out from labour and parts), or more than 50 parts.",
+      "A missing description or equipment, a cost field (costs are worked out from labour and parts), or more than 50 parts. An entry dated more than the owner's capture limit ago (60 days unless changed).",
   });
 
   defineRoute(

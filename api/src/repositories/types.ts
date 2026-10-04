@@ -1,4 +1,11 @@
-import type { HistoryQuery, JobRun, ListQuery, Notification } from "@reef/shared";
+import type {
+  HistoryQuery,
+  JobRun,
+  ListQuery,
+  Notification,
+  Role,
+  UserSummary,
+} from "@reef/shared";
 import type { Machine } from "../services/service-due.js";
 
 export type { HistoryQuery };
@@ -119,6 +126,13 @@ export interface HistoryRepository {
   list(query: HistoryQuery): Promise<Page<HistoryEntry>>;
 }
 
+export interface UserRepository {
+  /** Everyone who can sign in. Refused in the database unless the caller is an owner. */
+  list(): Promise<UserSummary[]>;
+  /** Sets one person's role and records why. Null if there is no such account. */
+  setRole(userId: string, role: Role, reason: string): Promise<UserSummary | null>;
+}
+
 /** Who is asking. `plant` is null for the owner, who sees every plant. */
 export type UserContext = {
   role: string;
@@ -235,4 +249,19 @@ export interface JobRepository {
 export interface NotificationRepository {
   list(userId: string, opts: { unread?: boolean; limit: number }): Promise<Notification[]>;
   markRead(userId: string, id: string): Promise<boolean>;
+}
+
+export type Setting = {
+  key: string;
+  value: unknown;
+  description: string | null;
+  updated_at: string;
+};
+
+export interface SettingsRepository {
+  list(): Promise<Setting[]>;
+  /** How many days old an entry may be when it is captured. */
+  captureMaxAgeDays(): Promise<number>;
+  /** Changes a setting. Null if there is no such setting. */
+  set(key: string, value: unknown, by: string): Promise<Setting | null>;
 }

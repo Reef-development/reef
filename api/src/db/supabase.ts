@@ -10,6 +10,7 @@ import {
   SupabaseMaintenanceRepository,
   SupabasePhotoStore,
   SupabaseRoleRepository,
+  SupabaseSettings,
   SupabaseStockUsage,
   SupabaseHistoryRepository,
   SupabaseAnalyticsRepository,
@@ -19,6 +20,7 @@ import {
   SupabaseSessionRepository,
   SupabaseServiceSweepRepository,
   SupabaseTableRepository,
+  SupabaseUserRepository,
 } from "../repositories/supabase.js";
 import type { JobRepository, ServiceSweepRepository } from "../repositories/types.js";
 
@@ -37,6 +39,7 @@ export function supabaseRepositories(config: Config) {
       roles: new SupabaseRoleRepository(db),
       sessions: new SupabaseSessionRepository(db),
       history: new SupabaseHistoryRepository(db),
+      users: new SupabaseUserRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
       production: new SupabaseTableRepository(db, "production_logs", "date"),
       fuel: new SupabaseTableRepository(db, "fuel_slips", "date"),
@@ -52,6 +55,7 @@ export function supabaseRepositories(config: Config) {
       notifications: new SupabaseNotificationRepository(db),
       jobs: new SupabaseJobRepository(db),
       purchaseActions: new SupabasePurchaseActions(db),
+      settings: new SupabaseSettings(db),
     };
   };
 }
