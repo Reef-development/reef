@@ -270,11 +270,12 @@ export function scopedResourceRoutes(
     },
     async (c) => {
       const id = parseWith(Id, c.req.param("id"));
-      const { version, ...changes } = (await parseBody(c, Update)) as { version: number } & Record<
-        string,
-        unknown
-      >;
-      const result = await spec.repo(c.var.repos).update(id, changes, version, ctx(c));
+      // The reason is not a column: it goes to the repository, which records it in the history.
+      const { version, reason, ...changes } = (await parseBody(c, Update)) as {
+        version: number;
+        reason: string;
+      } & Record<string, unknown>;
+      const result = await spec.repo(c.var.repos).update(id, changes, version, ctx(c), reason);
       if (result.status === "missing") throw notFound();
       if (result.status === "stale") {
         throw new ApiError(
