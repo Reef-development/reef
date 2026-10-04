@@ -24,7 +24,7 @@ describe("production logs", () => {
     ).json();
     const res = await call("PATCH", `/api/v1/production-logs/${created.data.id}`, {
       token: "worker-token",
-      body: { tons_produced: 900, version: 1 },
+      body: { tons_produced: 900, version: 1, reason: "Wrong slip" },
     });
     expect(res.status).toBe(403);
     expect(production.rows[0].tons_produced).toBe(100);
@@ -40,12 +40,12 @@ describe("production logs", () => {
     ).json();
     const ok = await call("PATCH", `/api/v1/production-logs/${created.data.id}`, {
       token: "manager-token",
-      body: { tons_produced: 110, version: 1 },
+      body: { tons_produced: 110, version: 1, reason: "Weighbridge slip corrected" },
     });
     expect(ok.status).toBe(200);
     const stale = await call("PATCH", `/api/v1/production-logs/${created.data.id}`, {
       token: "manager-token",
-      body: { tons_produced: 120, version: 1 },
+      body: { tons_produced: 120, version: 1, reason: "Second correction" },
     });
     expect(stale.status).toBe(409);
   });

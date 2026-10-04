@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { ListQuery, Mine } from "@reef/shared";
+import type { HistoryQuery, ListQuery, Mine } from "@reef/shared";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
 import type {
+  HistoryEntry,
+  HistoryRepository,
   MaintenancePartsRepository,
   Page,
   PhotoStore,
@@ -27,12 +29,59 @@ export const USERS: Record<string, { id: string; roles: string[] }> = {
 type AnyRow = { id: string; version: number } & Record<string, unknown>;
 
 /**
+ * The in-memory stand-in for the history table. Rows are appended, never updated or
+ * deleted. Tests read it to assert a change was recorded.
+ */
+export class MemoryHistory implements HistoryRepository {
+  rows: HistoryEntry[] = [];
+
+  async list(q: HistoryQuery): Promise<Page<HistoryEntry>> {
+    const matching = this.rows
+      .filter((r) => (!q.table || r.table_name === q.table) && (!q.row_id || r.row_id === q.row_id))
+      .reverse();
+    const from = (q.page - 1) * q.pageSize;
+    return { rows: matching.slice(from, from + q.pageSize), total: matching.length };
+  }
+
+  append(entry: Omit<HistoryEntry, "id" | "changed_at">): HistoryEntry {
+    const full: HistoryEntry = {
+      id: randomUUID(),
+      changed_at: new Date().toISOString(),
+      ...entry,
+    };
+    this.rows.push(full);
+    return full;
+  }
+}
+
+/**
+ * The columns that differ between `before` and `after`, leaving out version and updated_at,
+ * which change on every save. Mirrors the diff in the database trigger.
+ */
+function diff(before: Record<string, unknown>, after: Record<string, unknown>) {
+  const old: Record<string, unknown> = {};
+  const next: Record<string, unknown> = {};
+  for (const key of Object.keys(after)) {
+    if (key === "version" || key === "updated_at") continue;
+    if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
+      old[key] = before[key];
+      next[key] = after[key];
+    }
+  }
+  return { old, next };
+}
+
+/** Where a table records its changes, standing in for the history trigger (T6). */
+type Audit = { table: string; history: MemoryHistory; actor: () => string | null };
+
+/**
  * An in-memory table that behaves like the database where the routes can tell the difference:
  * versions rise on update, the version check and the write happen together, and `derive` stands
  * in for the triggers that work out totals. The SQL itself is tested in test/db.
  */
 export class MemoryTable<R extends AnyRow> implements Repository<R, object, object> {
   rows: R[] = [];
+  audit?: Audit;
 
   constructor(
     private readonly defaults: Partial<R> = {},
@@ -65,14 +114,41 @@ export class MemoryTable<R extends AnyRow> implements Repository<R, object, obje
     this.rows.push(row);
     return { ...row };
   }
-  /** Like the database: the version check and the write happen together, with no await between. */
-  async update(id: string, patch: object, expectedVersion: number): Promise<UpdateResult<R>> {
+  /**
+   * Like the database: the version check and the write happen together, with no await between.
+   * A missing reason is refused, as update_versioned refuses it, so a fake cannot hide that bug.
+   */
+  async update(
+    id: string,
+    patch: object,
+    expectedVersion: number,
+    reason: string,
+  ): Promise<UpdateResult<R>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (row.version !== expectedVersion) return { status: "stale", current: { ...row } };
+    const before = { ...row };
     Object.assign(row, patch, { version: row.version + 1, updated_at: new Date().toISOString() });
     this.derive(row);
+    if (this.audit) {
+      const { old, next } = diff(before, row);
+      if (Object.keys(next).length > 0) {
+        this.audit.history.append({
+          table_name: this.audit.table,
+          row_id: id,
+          changed_by: this.audit.actor() ?? "00000000-0000-0000-0000-000000000000",
+          reason: reason.trim(),
+          plant: typeof row.plant === "string" ? row.plant : null,
+          old_values: old,
+          new_values: next,
+          version: row.version,
+        });
+      }
+    }
     return { status: "updated", row: { ...row } };
   }
   async remove(id: string) {
@@ -142,12 +218,21 @@ export class MemoryMaintenance extends MemoryTable<AnyRow> {
 }
 
 export function testApp(overrides: Partial<Repositories> = {}) {
+  const history = new MemoryHistory();
+  // The signed-in user of the current request, which the history records as the actor, the
+  // way the trigger reads auth.uid().
+  let currentUserId: string | null = null;
+  const actor = () => currentUserId;
   const mines = new MemoryMines();
   const production = new MemoryTable<AnyRow>({ tons_produced: 0 });
   const fuel = new MemoryTable<AnyRow>({ photo_urls: [] }, (r) => {
     r.total_cost = Math.round(Number(r.litres ?? 0) * Number(r.cost_per_litre ?? 0) * 100) / 100;
   });
   const maintenance = new MemoryMaintenance();
+  mines.audit = { table: "mines", history, actor };
+  production.audit = { table: "production_logs", history, actor };
+  fuel.audit = { table: "fuel_slips", history, actor };
+  maintenance.audit = { table: "maintenance_logs", history, actor };
   const usage: { stock_item_id: string; qty: number }[] = [];
   const photoRequests: string[] = [];
 
@@ -187,17 +272,21 @@ export function testApp(overrides: Partial<Repositories> = {}) {
       if (!user) throw new Error("bad token");
       return { userId: user.id };
     },
-    repositories: (token) => ({
-      roles: { forUser: async () => USERS[token]?.roles ?? [] },
-      mines,
-      production,
-      fuel,
-      maintenance,
-      maintenanceParts,
-      stockUsage,
-      photos,
-      ...overrides,
-    }),
+    repositories: (token) => {
+      currentUserId = USERS[token]?.id ?? null;
+      return {
+        roles: { forUser: async () => USERS[token]?.roles ?? [] },
+        history,
+        mines,
+        production,
+        fuel,
+        maintenance,
+        maintenanceParts,
+        stockUsage,
+        photos,
+        ...overrides,
+      };
+    },
     log: (_msg, err) => logged.push(err),
   });
 
@@ -219,6 +308,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   return {
     app,
     registry,
+    history,
     mines,
     production,
     fuel,

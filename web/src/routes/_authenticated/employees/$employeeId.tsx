@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
@@ -67,6 +68,25 @@ function Page() {
   const [attStatus, setAttStatus] = useState<string>("present");
   const [transferOpen, setTransferOpen] = useState(false);
   const [toMine, setToMine] = useState("");
+
+  // T11: identity numbers are stored in a separate table and disclosed through
+  // the disclose_personal_information function. The function checks the caller's
+  // role inside the database and writes an audit row for both allowed and
+  // refused attempts. The identity number never appears on the employees row.
+  const [personalIdNumber, setPersonalIdNumber] = useState<string | null>(null);
+
+  const handlePersonalInformationLookup = async () => {
+    const { data, error } = await supabase.rpc("disclose_personal_information", {
+      _employee_id: employeeId,
+    });
+    if (error) {
+      console.error("Failed to disclose personal information:", error);
+      return;
+    }
+    if (data) {
+      setPersonalIdNumber(data as string);
+    }
+  };
 
   const openNewAtt = () => { setEditingAtt(null); setAttShift(emp?.shift ?? "morning"); setAttStatus("present"); setAttOpen(true); };
   const openEditAtt = (r: any) => { setEditingAtt(r); setAttShift(r.shift); setAttStatus(r.status); setAttOpen(true); };
@@ -151,7 +171,24 @@ function Page() {
         <CardContent className="grid gap-3 sm:grid-cols-3 text-sm">
           <Info label="Employee no." value={emp.employee_no} />
           <Info label="Phone" value={emp.phone} />
-          <Info label="ID number" value={emp.id_number} />
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              Personal information
+            </div>
+            {personalIdNumber ? (
+              <div>{personalIdNumber}</div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1"
+                onClick={handlePersonalInformationLookup}
+              >
+                View personal information
+              </Button>
+            )}
+          </div>
           <Info label="Hire date" value={emp.hire_date} />
           <Info label="Hourly rate" value={`${ZAR(emp.hourly_rate)}/h`} />
           <Info label="Status" value={emp.active ? "Active" : "Inactive"} />

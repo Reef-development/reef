@@ -7,6 +7,7 @@ import {
   SupabasePhotoStore,
   SupabaseRoleRepository,
   SupabaseStockUsage,
+  SupabaseHistoryRepository,
   SupabaseTableRepository,
 } from "../repositories/supabase.js";
 
@@ -23,6 +24,7 @@ export function supabaseRepositories(config: Config) {
     });
     return {
       roles: new SupabaseRoleRepository(db),
+      history: new SupabaseHistoryRepository(db),
       mines: new SupabaseTableRepository(db, "mines", "name"),
       production: new SupabaseTableRepository(db, "production_logs", "date"),
       fuel: new SupabaseTableRepository(db, "fuel_slips", "date"),

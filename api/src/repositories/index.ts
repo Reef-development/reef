@@ -10,6 +10,7 @@ import type {
   ProductionPatch,
 } from "@reef/shared";
 import type {
+  HistoryRepository,
   MaintenancePartsRepository,
   PhotoStore,
   Repository,
@@ -21,6 +22,7 @@ import type {
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {
   roles: RoleRepository;
+  history: HistoryRepository;
   mines: Repository<Mine, MineInput, MinePatch>;
   production: Repository<Row, ProductionInput, ProductionPatch>;
   fuel: Repository<Row, FuelInput, FuelPatch>;
