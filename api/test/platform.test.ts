@@ -219,4 +219,34 @@ describe("route registry", () => {
 
     expect(open).toEqual(["/health"]);
   });
+
+  it("registers the full CRUD set for every shared record resource", () => {
+    const routes = testApp().registry.routes;
+
+    const resources = [
+      "mines",
+      "production-logs",
+      "fuel-slips",
+      "maintenance-logs",
+      "stock",
+      "stock-levels",
+      "purchase-orders",
+    ];
+
+    for (const resource of resources) {
+      const area = routes
+        .filter((r) => r.path === `/api/v1/${resource}` || r.path === `/api/v1/${resource}/:id`)
+        .map((r) => `${r.method} ${r.path}`);
+
+      expect(area.sort(), resource).toEqual(
+        [
+          `DELETE /api/v1/${resource}/:id`,
+          `GET /api/v1/${resource}`,
+          `GET /api/v1/${resource}/:id`,
+          `PATCH /api/v1/${resource}/:id`,
+          `POST /api/v1/${resource}`,
+        ].sort(),
+      );
+    }
+  });
 });

@@ -200,3 +200,43 @@ describe("a plant is a thing rather than a spelling", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("employee transfer history", () => {
+  it("keeps the old and new mine after the employee moves", async () => {
+    const employee = await newEmployee("Transfer Test Employee");
+
+    const fromMine = await one<{ id: string }>(
+      "INSERT INTO mines (name) VALUES ('Transfer From Mine') RETURNING id",
+    );
+
+    const toMine = await one<{ id: string }>(
+      "INSERT INTO mines (name) VALUES ('Transfer To Mine') RETURNING id",
+    );
+
+    await db.query("UPDATE employees SET mine_id = $1 WHERE id = $2", [fromMine.id, employee.id]);
+
+    await db.query(
+      `INSERT INTO employee_transfers
+         (employee_id, from_mine_id, to_mine_id, transfer_date, reason)
+       VALUES ($1, $2, $3, '2026-10-04', 'Moved to another site')`,
+      [employee.id, fromMine.id, toMine.id],
+    );
+
+    await db.query("UPDATE employees SET mine_id = $1 WHERE id = $2", [toMine.id, employee.id]);
+
+    const transfer = await one<{
+      from_mine_id: string;
+      to_mine_id: string;
+      reason: string;
+    }>(
+      `SELECT from_mine_id, to_mine_id, reason
+       FROM employee_transfers
+       WHERE employee_id = $1`,
+      [employee.id],
+    );
+
+    expect(transfer.from_mine_id).toBe(fromMine.id);
+    expect(transfer.to_mine_id).toBe(toMine.id);
+    expect(transfer.reason).toBe("Moved to another site");
+  });
+});
