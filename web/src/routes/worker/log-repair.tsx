@@ -54,25 +54,25 @@ function Page() {
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Repair</h1>
       <div className="space-y-2">
-        <Label>Equipment</Label>
+        <Label htmlFor="log-repair-equipment">Equipment</Label>
         <Select value={equipId} onValueChange={setEquipId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select equipment" /></SelectTrigger>
+          <SelectTrigger id="log-repair-equipment" className="h-12 text-base"><SelectValue placeholder="Select equipment" /></SelectTrigger>
           <SelectContent>
             {equipment.data?.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
       <div className="space-y-2">
-        <Label>What happened</Label>
-        <Input className="h-12 text-base" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Replaced belt on conveyor 2" />
+        <Label htmlFor="log-repair-what-happened">What happened</Label>
+        <Input id="log-repair-what-happened" className="h-12 text-base" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. Replaced belt on conveyor 2" />
       </div>
       <div className="space-y-2">
-        <Label>Labour cost (ZAR)</Label>
-        <NumberField step="0.01" className="h-12 text-lg" value={cost} onValueChange={setCost} />
+        <Label htmlFor="log-repair-labour-cost-zar">Labour cost (ZAR)</Label>
+        <NumberField id="log-repair-labour-cost-zar" step="0.01" className="h-12 text-lg" value={cost} onValueChange={setCost} />
       </div>
       <div className="space-y-2">
-        <Label className="flex items-center gap-2"><Camera className="w-4 h-4" />Photos (optional)</Label>
-        <Input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
+        <Label htmlFor="log-repair-photos-optional" className="flex items-center gap-2"><Camera className="w-4 h-4" />Photos (optional)</Label>
+        <Input id="log-repair-photos-optional" type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
         {photos && <p className="text-xs text-muted-foreground">{photos.length} photo(s) selected</p>}
       </div>
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>

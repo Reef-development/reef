@@ -136,14 +136,14 @@ function Page() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={filterMine} onValueChange={setFilterMine}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All mines" /></SelectTrigger>
+          <SelectTrigger className="w-48" aria-label="Filter by mine"><SelectValue placeholder="All mines" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All mines</SelectItem>
             {mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterShift} onValueChange={setFilterShift}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="All shifts" /></SelectTrigger>
+          <SelectTrigger className="w-40" aria-label="Filter by shift"><SelectValue placeholder="All shifts" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All shifts</SelectItem>
             {SHIFTS.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
