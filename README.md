@@ -30,22 +30,17 @@ needs, and works the answers out automatically.
 
 ## Live system and demo accounts
 
-| What | Address |
-|---|---|
-| Web app | **https://reef-joe-d0a1.vercel.app/** |
-| API | **TODO: Render URL** (health check: `/health`) |
-| Presentation | **TODO: slides / video link** |
+**Web app:** https://reef-joe-d0a1.vercel.app/
 
-Sign in with one of these demo accounts, or use the **Owner demo** and **Worker demo**
-buttons on the sign-in screen:
+Sign in with one of these demo accounts:
 
 | Role | Email | Password |
 |---|---|---|
-| Owner (sees every plant, analytics and admin) | `owner@reef.co.za` | `Reef2026.` |
-| Worker (captures daily entries for one plant) | `worker1@reef.co.za` | `Reef2026.` |
+| Owner (sees every plant, analytics and admin) | `owner@reef.co.za` | `reef2026.` |
+| Worker (captures daily entries for one plant) | `worker@reef.co.za` | `reef2026.` |
 
-The password is case-sensitive: capital **R**, ending in **!**. These accounts hold demo data
-only and are not real credentials.
+The password is all lower case and ends with a full stop. These accounts hold demo data only
+and are not real credentials.
 
 ---
 
