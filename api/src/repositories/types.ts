@@ -1,4 +1,6 @@
 import type {
+  ReportRun,
+  ReportRunReceipt,
   HistoryQuery,
   JobRun,
   ListQuery,
@@ -270,4 +272,11 @@ export interface SettingsRepository {
   captureMaxAgeDays(): Promise<number>;
   /** Changes a setting. Null if there is no such setting. */
   set(key: string, value: unknown, by: string): Promise<Setting | null>;
+}
+
+export interface ReportRunRepository {
+  /** Notes that the monthly report for this site and month was produced now (T10). */
+  record(mineId: string, month: string): Promise<ReportRunReceipt>;
+  /** Reports produced, newest first, for one site or every site. */
+  list(mineId?: string): Promise<ReportRun[]>;
 }

@@ -6,12 +6,14 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  Notification,
   PoLine,
   PoLineInput,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderPatch,
   PurchaseOrderStatus,
+  ReportRun,
   Role,
   Stock,
   StockInput,
@@ -19,7 +21,6 @@ import type {
   StockLevelInput,
   StockLevelPatch,
   StockPatch,
-  Notification,
   UserSummary,
 } from "@reef/shared";
 import type { Machine } from "../src/services/service-due.js";
@@ -41,6 +42,7 @@ import type {
   Period,
   PhotoStore,
   ProductionTotals,
+  ReportRunRepository,
   Repository,
   RetentionRepository,
   Row,
@@ -948,6 +950,48 @@ export class MemoryReorderRequests implements ReorderRequestRepository {
   }
 }
 
+/**
+ * The stand-in for report_runs. `markOutOfDate` plays the part of the database trigger, which
+ * the real-Postgres tests prove; here it lets a test put a run into that state.
+ */
+export class MemoryReportRuns implements ReportRunRepository {
+  rows: ReportRun[] = [];
+  async record(mineId: string, month: string) {
+    const previous = this.rows.find((r) => r.mine_id === mineId && r.month === month) ?? null;
+    const now = new Date().toISOString();
+    const row: ReportRun = {
+      mine_id: mineId,
+      month,
+      generated_at: now,
+      month_complete: true,
+      out_of_date_since: null,
+      out_of_date_reason: null,
+    };
+    this.rows = this.rows.filter((r) => r !== previous).concat(row);
+    return {
+      generated_at: now,
+      month_complete: true,
+      previous: previous
+        ? {
+            generated_at: previous.generated_at,
+            out_of_date_since: previous.out_of_date_since,
+            out_of_date_reason: previous.out_of_date_reason,
+          }
+        : null,
+    };
+  }
+  async list(mineId?: string) {
+    return this.rows.filter((r) => !mineId || r.mine_id === mineId).map((r) => ({ ...r }));
+  }
+  markOutOfDate(mineId: string, month: string, reason: string) {
+    const row = this.rows.find((r) => r.mine_id === mineId && r.month === month);
+    if (row) {
+      row.out_of_date_since = new Date().toISOString();
+      row.out_of_date_reason = reason;
+    }
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   // The signed-in user of the current request, which the history records as the actor, the
@@ -973,6 +1017,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   const usage: { stock_item_id: string; qty: number }[] = [];
   const photoRequests: string[] = [];
   const analytics = new MemoryAnalytics();
+  const reportRuns = new MemoryReportRuns();
   const retention = new MemoryRetention();
   const notifications = new MemoryNotifications();
   const jobs = new MemoryJobs();
@@ -1072,6 +1117,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         purchaseOrders,
         purchaseActions,
         analytics,
+        reportRuns,
         retention,
         notifications,
         jobs,
@@ -1120,6 +1166,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     stockLevels,
     purchaseOrders,
     analytics,
+    reportRuns,
     jobs,
     reorderRequests,
     notifications,
