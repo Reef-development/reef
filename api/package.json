@@ -18,11 +18,15 @@
     "@supabase/supabase-js": "^2.110.7",
     "hono": "^4.9.0",
     "jose": "^6.0.0",
+    "nodemailer": "^10.0.15",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.16.5",
+    "@types/nodemailer": "^8.0.2",
+    "@types/smtp-server": "^3.5.13",
+    "smtp-server": "^3.19.17",
     "tsx": "^4.20.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.0"

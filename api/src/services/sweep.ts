@@ -1,5 +1,6 @@
 import type { ServiceDue } from "@reef/shared";
 import type { NotificationDraft, ServiceSweepRepository } from "../repositories/types.js";
+import { renderNotification, type Mailer } from "./email.js";
 import { allDue, message } from "./service-due.js";
 
 export type SweepResult = {
@@ -8,7 +9,14 @@ export type SweepResult = {
   raised: number;
   /** Machines that are due but have nobody to tell. Silence here would hide a misconfigured site. */
   without_recipients: string[];
+  /** Emails that went out on this run (T17). */
+  emailed: number;
+  /** Emails the mail server refused. Each is recorded against its notification. */
+  email_failed: number;
 };
+
+/** Where reminders go out by email. Without it, notifications are raised but not emailed. */
+export type MailSettings = { mailer: Mailer; link: string };
 
 /**
  * One pass over every machine: work out what is due, and tell the people who can act on it.
@@ -18,7 +26,11 @@ export type SweepResult = {
  * until something changes. A `raised` that equals `due` every single day means the suppression
  * is not working, which is the failure this returns a number for.
  */
-export async function sweep(repo: ServiceSweepRepository, today: string): Promise<SweepResult> {
+export async function sweep(
+  repo: ServiceSweepRepository,
+  today: string,
+  mail?: MailSettings,
+): Promise<SweepResult> {
   const machines = await repo.machines();
   const due: ServiceDue[] = allDue(machines, today);
 
@@ -46,13 +58,41 @@ export async function sweep(repo: ServiceSweepRepository, today: string): Promis
   }
 
   const raised = drafts.length > 0 ? await repo.raise(drafts) : 0;
+  const delivery = mail ? await deliver(repo, mail) : { emailed: 0, email_failed: 0 };
 
   return {
     machines: machines.length,
     due: due.length,
     raised,
     without_recipients: without,
+    ...delivery,
   };
+}
+
+/**
+ * Emails every notification that has not gone out yet (T17).
+ *
+ * A notification is emailed once: it is marked when the mail server accepts it, and a marked
+ * one is never listed again, so a machine that stays due does not send a reminder every day.
+ * A refusal is caught per message and written against that notification. The reminder was
+ * already raised and is readable in the app, so one bad address or a mail server that is down
+ * must not fail the sweep or stop the other emails.
+ */
+export async function deliver(repo: ServiceSweepRepository, mail: MailSettings) {
+  let emailed = 0;
+  let email_failed = 0;
+  for (const n of await repo.unsent()) {
+    try {
+      await mail.mailer.send(n.email, renderNotification(n, mail.link));
+    } catch (err) {
+      email_failed += 1;
+      await repo.markEmailFailed(n.id, err instanceof Error ? err.message : String(err));
+      continue;
+    }
+    emailed += 1;
+    await repo.markEmailed(n.id);
+  }
+  return { emailed, email_failed };
 }
 
 /** One line for the job record, so a run can be read without opening the notifications. */
@@ -61,5 +101,7 @@ export function describe(result: SweepResult): string {
   if (result.without_recipients.length > 0) {
     parts.push(`${result.without_recipients.length} with nobody to tell`);
   }
+  if (result.emailed > 0) parts.push(`${result.emailed} emailed`);
+  if (result.email_failed > 0) parts.push(`${result.email_failed} emails failed`);
   return parts.join(", ");
 }

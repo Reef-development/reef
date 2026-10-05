@@ -3,6 +3,7 @@ import { createApp } from "./app.js";
 import { supabaseVerifier } from "./auth/verify.js";
 import { loadConfig } from "./config.js";
 import { schedulerRepositories, supabaseRepositories } from "./db/supabase.js";
+import { SmtpMailer } from "./services/email.js";
 import { startScheduler } from "./services/scheduler.js";
 
 const config = loadConfig();
@@ -25,6 +26,12 @@ const stopScheduler = scheduled
       jobs: scheduled.jobs,
       sweepRepo: scheduled.sweepRepo,
       zone: config.timezone,
+      mail: config.smtp
+        ? {
+            mailer: new SmtpMailer(config.smtp.url, config.smtp.from),
+            link: `${config.appUrl}/maintenance`,
+          }
+        : undefined,
       log: (message) => console.log(message),
     })
   : null;
@@ -36,6 +43,10 @@ if (!scheduled) {
     "SUPABASE_SERVICE_ROLE_KEY is not set, so the service reminder sweep is NOT running. " +
       "Every day it does not run shows as missed on GET /api/v1/admin/jobs.",
   );
+}
+
+if (scheduled && !config.smtp) {
+  console.warn("SMTP_URL is not set, so service reminders are shown in the app but NOT emailed.");
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

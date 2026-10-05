@@ -1,4 +1,5 @@
 import type { ServiceDue } from "@reef/shared";
+import nodemailer from "nodemailer";
 import { message } from "./service-due.js";
 
 /**
@@ -30,6 +31,29 @@ export class LoggingMailer implements Mailer {
   }
 }
 
+/**
+ * Sends through any SMTP server, named by a URL such as smtps://user:pass@smtp.example.com
+ * (T17). The URL is the whole configuration, so changing provider is a setting, not code.
+ */
+export class SmtpMailer implements Mailer {
+  private readonly transport: ReturnType<typeof nodemailer.createTransport>;
+  constructor(
+    url: string,
+    private readonly from: string,
+  ) {
+    this.transport = nodemailer.createTransport(url);
+  }
+  async send(to: string, email: Email) {
+    await this.transport.sendMail({
+      from: this.from,
+      to,
+      subject: email.subject,
+      text: email.text,
+      html: email.html,
+    });
+  }
+}
+
 function escape(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -39,8 +63,14 @@ function escape(text: string): string {
 }
 
 export function renderServiceDue(due: ServiceDue, link: string): Email {
-  const { subject, body } = message(due);
+  return renderNotification(message(due), link);
+}
 
+/** Any notification as an email: the stored subject and body, laid out for an inbox. */
+export function renderNotification(
+  { subject, body }: { subject: string; body: string },
+  link: string,
+): Email {
   const text = [
     body,
     "",

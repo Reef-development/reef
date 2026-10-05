@@ -154,7 +154,20 @@ export interface ServiceSweepRepository {
   machines(): Promise<Machine[]>;
   recipients(mineId: string | null): Promise<string[]>;
   raise(rows: readonly NotificationDraft[]): Promise<number>;
+  /**
+   * Notifications whose email has not gone out yet (T17), with the address of the person each
+   * one is for. One that failed recently is listed again, so a mail server that was down for a
+   * day does not lose that day's reminders.
+   */
+  unsent(): Promise<OutgoingEmail[]>;
+  /** Notes that the email went out, so no later sweep sends it again. */
+  markEmailed(id: string): Promise<void>;
+  /** Records why the email failed. The notification itself stands and stays readable. */
+  markEmailFailed(id: string, error: string): Promise<void>;
 }
+
+/** A notification ready to go out by email. */
+export type OutgoingEmail = { id: string; email: string; subject: string; body: string };
 
 export type NotificationDraft = {
   user_id: string;
