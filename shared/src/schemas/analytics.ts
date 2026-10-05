@@ -58,4 +58,35 @@ export type MonthlyReport = {
   downtime: DowntimeByReason[];
   /** Plain sentences built from the figures above, never from anything else. */
   narrative: string[];
+  /** This report's run (T10): when it was made, and whether the one before had gone out of date. */
+  run: ReportRunReceipt;
 };
+
+/**
+ * A month-end report that was produced, as kept by report_runs (T10). `out_of_date_since` is set
+ * once an entry dated in the month was added, changed or removed after the report was made.
+ */
+export type ReportRun = {
+  mine_id: string;
+  month: string;
+  generated_at: string;
+  /** False when the month had not ended yet; such a report is expected to change. */
+  month_complete: boolean;
+  out_of_date_since: string | null;
+  out_of_date_reason: string | null;
+};
+
+/** What producing a report records, and what the run before it had become. */
+export type ReportRunReceipt = {
+  generated_at: string;
+  month_complete: boolean;
+  previous: {
+    generated_at: string;
+    out_of_date_since: string | null;
+    out_of_date_reason: string | null;
+  } | null;
+};
+
+/** Listing reports that have been produced, for one site or every site the caller sees. */
+export const ReportRunsQuery = z.object({ mine_id: Id.optional() }).strict();
+export type ReportRunsQuery = z.infer<typeof ReportRunsQuery>;

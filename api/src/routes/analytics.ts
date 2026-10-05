@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-import { MonthQuery, PeriodQuery, type MonthlyReport } from "@reef/shared";
+import { ReportRunsQuery, MonthQuery, PeriodQuery, type MonthlyReport } from "@reef/shared";
 import type { AppEnv } from "../app.js";
 import { parseWith } from "../http/body.js";
 import { ok } from "../http/envelope.js";
@@ -54,6 +54,10 @@ async function monthlyReport(
     );
   }
 
+  // Producing the report is what report_runs keeps a note of (T10), so a late entry in this
+  // month can mark it out of date afterwards.
+  const run = await c.var.repos.reportRuns.record(mine.id, q.month);
+
   return {
     mine_id: mine.id,
     mine_name: mine.name,
@@ -62,10 +66,29 @@ async function monthlyReport(
     production,
     downtime,
     narrative,
+    run,
   };
 }
 
 export function analyticsRoutes(app: Hono<AppEnv>, registry: Registry) {
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "GET",
+      path: "/api/v1/reports/runs",
+      access: "reports:read",
+      summary:
+        "The month-end reports that have been produced, newest first, each saying whether it is out of date: an entry dated in its month was added, changed or removed after it was made, so the figures in it are no longer the figures in the system.",
+      refuses:
+        "Workers, who do not see reports. Also a site id that is not an id. A report of a month still running is never marked: it is expected to change.",
+    },
+    async (c) => {
+      const q = parseWith(ReportRunsQuery, c.req.query());
+      return ok(c, await c.var.repos.reportRuns.list(q.mine_id));
+    },
+  );
+
   defineRoute(
     app,
     registry,
