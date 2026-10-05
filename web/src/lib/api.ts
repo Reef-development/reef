@@ -55,7 +55,7 @@ export async function apiListAll<T>(
   path: string,
   params: Record<string, string | number> = {},
 ): Promise<T[]> {
-  const { page = 1, pageSize = 500, ...rest } = params;
+  const { page = 1, pageSize = 200, ...rest } = params;
   const qs = new URLSearchParams({
     ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, String(v)])),
     page: String(page),
