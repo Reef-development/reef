@@ -1,0 +1,27 @@
+-- T14 hardening: content moved.
+--
+-- This migration previously did four things, all of which have been consolidated into
+-- the migrations that actually own the tables:
+--
+--   - It added stock_items.plant and profiles.plant. These now live in
+--     20261001120000_stock_by_plant.sql, which is the migration that first uses them.
+--     Putting them here meant a fresh database failed on 120000 before ever reaching
+--     this file.
+--
+--   - It rewrote every policy on stock_items. That is now in
+--     20261001120000_stock_by_plant.sql.
+--
+--   - It rewrote every policy on stock_levels and purchase_orders. That is now in
+--     20261001140000_purchase_orders_by_plant.sql, the migration that creates those
+--     tables and adds purchase_orders.plant.
+--
+--   - It installed the two triggers that lock stock_items.plant and profiles.plant.
+--     Those are now in 20261001120000_stock_by_plant.sql.
+--
+-- Nothing is dropped here. The file is kept so a database that already applied the
+-- earlier version of it does not re-run statements that have moved, and so the migration
+-- history on that database still matches a file in the repository.
+--
+-- Verified on a fresh database: 120000 creates the stock_items columns and policies and
+-- installs the two triggers; 140000 creates stock_levels, adds purchase_orders.plant, and
+-- installs the policies for both; 160000 (this file) is a no-op.

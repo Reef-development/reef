@@ -1,0 +1,242 @@
+import { beforeAll, describe, expect, it } from "vitest";
+import { migratedDb, type Db } from "./harness.js";
+
+// T11A and T24 against a real Postgres. Three of the things these tasks rest on cannot be
+// tested against the in-memory fakes at all, because a fake has no constraints, no row-level
+// security and no SECURITY DEFINER functions:
+//
+//   * the suppression rule really suppresses, through an ON CONFLICT the database accepts
+//   * claiming a day really excludes a second claim
+//   * identity numbers are reachable only through a function, and only by the owner
+//
+// The first of those is where the first version of this work was wrong.
+
+let db: Db;
+let owner: string;
+let manager: string;
+
+beforeAll(async () => {
+  db = await migratedDb();
+  owner = await db.user("owner");
+  manager = await db.user("manager");
+}, 60_000);
+
+const one = async <T = Record<string, unknown>>(sql: string, params: unknown[] = []) =>
+  (await db.query<T>(sql, params)).rows[0];
+
+async function newEmployee(name: string) {
+  return one<{ id: string }>("INSERT INTO employees (full_name) VALUES ($1) RETURNING id", [name]);
+}
+
+describe("the notification suppression, against a real database", () => {
+  async function raise(userId: string, key: string) {
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO notifications (user_id, kind, subject, body, dedupe_key)
+       VALUES ($1, 'service_due', 's', 'b', $2)
+       ON CONFLICT (user_id, dedupe_key) DO NOTHING
+       RETURNING id`,
+      [userId, key],
+    );
+    return rows.length;
+  }
+
+  it("accepts the ON CONFLICT the API actually sends", async () => {
+    // This is the whole point of the test. A partial unique index would reject this statement
+    // with 42P10 unless it repeated the index predicate, and PostgREST cannot send a predicate,
+    // so the sweep would have failed every time while every fake test passed.
+    await expect(raise(owner, "service_due:m1:date:2026-09-30")).resolves.toBe(1);
+  });
+
+  it("creates the first and suppresses the second", async () => {
+    const key = "service_due:m2:date:2026-09-30";
+    expect(await raise(owner, key)).toBe(1);
+    expect(await raise(owner, key)).toBe(0);
+    const { count } = await one<{ count: string }>(
+      "SELECT count(*)::text AS count FROM notifications WHERE dedupe_key = $1",
+      [key],
+    );
+    expect(count).toBe("1");
+  });
+
+  it("keeps two people's copies of the same reminder apart", async () => {
+    const key = "service_due:m3:date:2026-09-30";
+    expect(await raise(owner, key)).toBe(1);
+    expect(await raise(manager, key)).toBe(1);
+  });
+
+  it("refuses a notification with no key, so one can never silently repeat", async () => {
+    await expect(
+      db.query(
+        "INSERT INTO notifications (user_id, kind, subject, body) VALUES ($1, 'service_due', 's', 'b')",
+        [owner],
+      ),
+    ).rejects.toThrow(/dedupe_key/);
+  });
+
+  it("lets a person read only their own, whatever their role", async () => {
+    await raise(owner, "service_due:m4:date:2026-09-30");
+    await raise(manager, "service_due:m5:date:2026-09-30");
+    const mine = await db.as(manager, async (tx) =>
+      tx.query<{ user_id: string }>("SELECT user_id FROM notifications"),
+    );
+    expect(mine.rows.every((r) => r.user_id === manager)).toBe(true);
+    expect(mine.rows.length).toBeGreaterThan(0);
+  });
+
+  it("does not let a signed-in user create one at all", async () => {
+    // Notifications are raised by the sweep, which runs as the service role. There is no insert
+    // policy for authenticated, so nobody can send themselves or anybody else a notification.
+    await expect(
+      db.as(owner, async (tx) =>
+        tx.query(
+          "INSERT INTO notifications (user_id, kind, subject, body, dedupe_key) VALUES ($1, 'service_due', 's', 'b', 'x')",
+          [owner],
+        ),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("claiming a day, against a real database", () => {
+  it("lets the first claim through and refuses the second", async () => {
+    const claim = () =>
+      db.query("INSERT INTO job_runs (job, ran_for) VALUES ('service_due_sweep', '2026-10-04')");
+    await expect(claim()).resolves.toBeDefined();
+    await expect(claim()).rejects.toThrow();
+  });
+
+  it("is the owner's to read", async () => {
+    const asOwner = await db.as(owner, async (tx) => tx.query("SELECT * FROM job_runs"));
+    expect(asOwner.rows.length).toBeGreaterThan(0);
+    const asManager = await db.as(manager, async (tx) => tx.query("SELECT * FROM job_runs"));
+    expect(asManager.rows).toHaveLength(0);
+  });
+});
+
+describe("identity numbers, after T11 moved them", () => {
+  it("are not a column on employees any more", async () => {
+    const { count } = await one<{ count: string }>(
+      `SELECT count(*)::text AS count FROM information_schema.columns
+       WHERE table_name = 'employees' AND column_name = 'id_number'`,
+    );
+    expect(count).toBe("0");
+  });
+
+  it("are counted through the function, which returns ids and no numbers", async () => {
+    const employee = await newEmployee("Thandi Mokoena");
+    await db.query(
+      "INSERT INTO employee_personal_information (employee_id, id_number) VALUES ($1, '0000000000000')",
+      [employee.id],
+    );
+    const held = await db.as(owner, async (tx) =>
+      tx.query<{ employee_id: string }>("SELECT * FROM employees_holding_identity_number()"),
+    );
+    expect(held.rows.map((r) => r.employee_id)).toContain(employee.id);
+    expect(JSON.stringify(held.rows)).not.toContain("0000000000000");
+  });
+
+  it("are refused to a manager, by the function rather than by the screen", async () => {
+    await expect(
+      db.as(manager, async (tx) => tx.query("SELECT * FROM employees_holding_identity_number()")),
+    ).rejects.toThrow();
+  });
+
+  it("leave the leaving date on the employee row, where both periods are measured from", async () => {
+    const { count } = await one<{ count: string }>(
+      `SELECT count(*)::text AS count FROM information_schema.columns
+       WHERE table_name = 'employees' AND column_name = 'left_on'`,
+    );
+    expect(count).toBe("1");
+  });
+});
+
+describe("a plant is a thing rather than a spelling", () => {
+  it("accepts a plant that exists", async () => {
+    await db.query("INSERT INTO plants (name) VALUES ('Mokopane Plant 1')");
+    await expect(
+      db.query("INSERT INTO mines (name, plant) VALUES ('Alpha', 'Mokopane Plant 1')"),
+    ).resolves.toBeDefined();
+  });
+
+  it("refuses a plant nobody has heard of, on every table that carries one", async () => {
+    // This is the whole point. While plant was free text, a typo was accepted and then matched
+    // nothing for ever: the person's stock list went empty, their purchase orders disappeared,
+    // and no error was raised anywhere, because an access rule matching nothing looks exactly
+    // like an access rule working.
+    await expect(
+      db.query("INSERT INTO mines (name, plant) VALUES ('Beta', 'Mokopane 1')"),
+    ).rejects.toThrow(/foreign key|plants/i);
+
+    await expect(
+      db.query("INSERT INTO stock_items (name, plant) VALUES ('Belt', 'Mokopane 1')"),
+    ).rejects.toThrow(/foreign key|plants/i);
+
+    // profiles.plant is not tested here on purpose: T14 already installs a trigger refusing any
+    // change to it by a user, and that refusal fires before the key is ever reached. Two guards,
+    // and the stricter one wins.
+  });
+
+  it("renames a plant everywhere in one statement", async () => {
+    // Using the name as the key is only safe because of ON UPDATE CASCADE. Without it, renaming
+    // a plant would be the one operation a text key makes dangerous.
+    await db.query("INSERT INTO plants (name) VALUES ('Old Name')");
+    await db.query("INSERT INTO mines (name, plant) VALUES ('Gamma', 'Old Name')");
+    await db.query("UPDATE plants SET name = 'New Name' WHERE name = 'Old Name'");
+    const { plant } = await one<{ plant: string }>("SELECT plant FROM mines WHERE name = 'Gamma'");
+    expect(plant).toBe("New Name");
+  });
+
+  it("lets a mine have no plant yet, so the column can be filled in over time", async () => {
+    await expect(
+      db.query("INSERT INTO mines (name) VALUES ('Not assigned yet')"),
+    ).resolves.toBeDefined();
+  });
+
+  it("is readable by anyone signed in and writable only by the owner", async () => {
+    const asManager = await db.as(manager, async (tx) => tx.query("SELECT * FROM plants"));
+    expect(asManager.rows.length).toBeGreaterThan(0);
+    await expect(
+      db.as(manager, async (tx) => tx.query("INSERT INTO plants (name) VALUES ('Sneaky')")),
+    ).rejects.toThrow();
+  });
+});
+
+describe("employee transfer history", () => {
+  it("keeps the old and new mine after the employee moves", async () => {
+    const employee = await newEmployee("Transfer Test Employee");
+
+    const fromMine = await one<{ id: string }>(
+      "INSERT INTO mines (name) VALUES ('Transfer From Mine') RETURNING id",
+    );
+
+    const toMine = await one<{ id: string }>(
+      "INSERT INTO mines (name) VALUES ('Transfer To Mine') RETURNING id",
+    );
+
+    await db.query("UPDATE employees SET mine_id = $1 WHERE id = $2", [fromMine.id, employee.id]);
+
+    await db.query(
+      `INSERT INTO employee_transfers
+         (employee_id, from_mine_id, to_mine_id, transfer_date, reason)
+       VALUES ($1, $2, $3, '2026-10-04', 'Moved to another site')`,
+      [employee.id, fromMine.id, toMine.id],
+    );
+
+    await db.query("UPDATE employees SET mine_id = $1 WHERE id = $2", [toMine.id, employee.id]);
+
+    const transfer = await one<{
+      from_mine_id: string;
+      to_mine_id: string;
+      reason: string;
+    }>(
+      `SELECT from_mine_id, to_mine_id, reason
+       FROM employee_transfers
+       WHERE employee_id = $1`,
+      [employee.id],
+    );
+
+    expect(transfer.from_mine_id).toBe(fromMine.id);
+    expect(transfer.to_mine_id).toBe(toMine.id);
+    expect(transfer.reason).toBe("Moved to another site");
+  });
+});
