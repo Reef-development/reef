@@ -20,25 +20,29 @@ import type {
 } from "@reef/shared";
 import type {
   HistoryRepository,
+  AnalyticsRepository,
+  JobRepository,
   MaintenancePartsRepository,
+  NotificationRepository,
   PhotoStore,
   Repository,
+  RetentionRepository,
   RoleRepository,
   Row,
   ScopedRepository,
-  StockUsageRepository,
+  SettingsRepository,
   SessionRepository,
-  AnalyticsRepository,
-  JobRepository,
-  NotificationRepository,
-  RetentionRepository,
+  StockUsageRepository,
+  UserRepository,
 } from "./types.js";
+import type { PurchaseActionsRepository } from "./purchase-actions.js";
 
 /** Everything a request can reach, already scoped to the caller. */
 export type Repositories = {
   roles: RoleRepository;
   sessions: SessionRepository;
   history: HistoryRepository;
+  users: UserRepository;
   mines: Repository<Mine, MineInput, MinePatch>;
   production: Repository<Row, ProductionInput, ProductionPatch>;
   fuel: Repository<Row, FuelInput, FuelPatch>;
@@ -53,4 +57,6 @@ export type Repositories = {
   retention: RetentionRepository;
   notifications: NotificationRepository;
   jobs: JobRepository;
+  purchaseActions: PurchaseActionsRepository;
+  settings: SettingsRepository;
 };

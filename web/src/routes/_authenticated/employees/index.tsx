@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,11 +31,13 @@ export const Route = createFileRoute("/_authenticated/employees/")({
 
 const SHIFTS = ["morning", "midday", "night"] as const;
 
-function Page() {
+// Exported so the test can mount it without going through the router.
+export function Page() {
   const employees = useList<any>("employees", "full_name", true);
   const mines = useList<any>("mines", "name", true);
   const attendance = useList<any>("attendance", "date");
   const upsert = useUpsert("employees");
+  const reason = useChangeReason();
   const remove = useRemove("employees");
 
   const [open, setOpen] = useState(false);
@@ -50,6 +53,9 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     const idNumber = String(f.get("id_number") || "");
 
     // T11: id_number is not on `employees` anymore. It lives in a separate
@@ -57,7 +63,7 @@ function Page() {
     // fields first, then write the identity number through the RPC if the
     // user typed one.
     const savedEmployee = (await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       full_name: f.get("full_name"),
       employee_no: f.get("employee_no") || null,
       position: f.get("position") || null,
@@ -131,14 +137,14 @@ function Page() {
 
       <div className="flex flex-wrap gap-2 mb-4">
         <Select value={filterMine} onValueChange={setFilterMine}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All mines" /></SelectTrigger>
+          <SelectTrigger className="w-48" aria-label="Filter by mine"><SelectValue placeholder="All mines" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All mines</SelectItem>
             {mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterShift} onValueChange={setFilterShift}>
-          <SelectTrigger className="w-40"><SelectValue placeholder="All shifts" /></SelectTrigger>
+          <SelectTrigger className="w-40" aria-label="Filter by shift"><SelectValue placeholder="All shifts" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All shifts</SelectItem>
             {SHIFTS.map((s) => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
@@ -187,6 +193,7 @@ function Page() {
             </div>
             <Field label="Hire date"><Input name="hire_date" type="date" defaultValue={editing?.hire_date ?? ""} /></Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

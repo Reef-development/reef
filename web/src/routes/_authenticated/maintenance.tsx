@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useCaptureLimit } from "@/hooks/useCaptureLimit";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { useList, useRemove, ZAR, NUM } from "@/lib/reef-db";
+import { STOCK_KEY, useStockOnHand } from "@/hooks/useStock";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -20,9 +23,10 @@ export const Route = createFileRoute("/_authenticated/maintenance")({ component:
 type PartRow = { stock_item_id: string; qty: number };
 
 function Page() {
+  const limit = useCaptureLimit();
   const list = useList<any>("maintenance_logs", "date");
   const equipment = useList<any>("equipment", "name", true);
-  const stock = useList<any>("stock_items", "name", true);
+  const stock = useStockOnHand();
   const qc = useQueryClient();
   const remove = useRemove("maintenance_logs");
 
@@ -44,7 +48,7 @@ function Page() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["maintenance_logs"] });
-      qc.invalidateQueries({ queryKey: ["stock_items"] });
+      qc.invalidateQueries({ queryKey: STOCK_KEY });
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
       toast.success("Repair logged. Stock updated and POs drafted where needed.");
       setOpen(false);
@@ -52,11 +56,13 @@ function Page() {
     onError: (e: any) => toast.error(e.message ?? "Save failed"),
   });
 
+  const once = useOneAtATime();
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     if (!equipId) return toast.error("Select equipment");
-    saveLog.mutate({
+    // A double tap must not log the repair twice: the second submit is ignored while the first is in flight.
+    await once(() => saveLog.mutateAsync({
       equipment_id: equipId,
       date: f.get("date"),
       description: f.get("description"),
@@ -66,7 +72,7 @@ function Page() {
       next_due_date: f.get("next_due_date") || null,
       next_due_tons: Number(f.get("next_due_tons") || 0) || null,
       performed_by: f.get("performed_by") || null,
-    });
+    })).catch(() => {});
   };
 
   return (
@@ -85,7 +91,7 @@ function Page() {
                   <SelectContent>{equipment.data?.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Date"><Input name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
+              <Field label="Date"><Input name="date" type="date" required min={limit.earliest} max={limit.today} defaultValue={limit.today} /><p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p></Field>
             </div>
             <Field label="Description"><Input name="description" required placeholder="What was repaired" /></Field>
             <div className="grid grid-cols-3 gap-3">

@@ -22,6 +22,8 @@ function translate(err: PgError): ApiError {
         "CONFLICT",
         "This record is linked to another record that does not exist or still uses it",
       );
+    case "23514":
+      return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
     case "22P02":
       return new ApiError("VALIDATION_FAILED", "A value has the wrong format");
     default:
@@ -95,17 +97,21 @@ export class SupabasePurchaseOrderRepository implements ScopedRepository<
     patch: PurchaseOrderPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<PurchaseOrder>> {
+    // Check the caller can see the record before allowing a write.
     const existing = await this.get(id, user);
     if (!existing) return { status: "missing" };
 
-    const { data, error } = await this.db
-      .from("purchase_orders")
-      .update(patch as object)
-      .eq("id", id)
-      .eq("version", expectedVersion)
-      .select()
-      .maybeSingle();
+    // update_versioned (T6) checks the version, records the reason in the history, and runs as
+    // the caller, so the plant policies still apply underneath.
+    const { data, error } = await this.db.rpc("update_versioned", {
+      p_table: "purchase_orders",
+      p_id: id,
+      p_patch: patch,
+      p_expected_version: expectedVersion,
+      p_reason: reason,
+    });
     if (error) throw translate(error);
     if (data) return { status: "updated", row: data as PurchaseOrder };
     const current = await this.get(id, user);

@@ -44,6 +44,8 @@ export const PERMISSIONS = {
   "po:write": ["owner", "manager"],
   // Managers see only their own plant's changes; the database enforces that part.
   "history:read": ["owner", "manager"],
+  // Who can sign in and with which role. Owner only: a role decides what every screen allows.
+  "users:manage": ["owner"],
   // Money figures. A worker captures the numbers that feed these and does not see what they
   // add up to, which is the line section 2.2.2 of the brief draws.
   "analytics:read": ["owner", "manager"],
@@ -61,6 +63,11 @@ export const PERMISSIONS = {
   // Whether the scheduled sweep has been running. The owner's, because a day with no run is a
   // question about whether the system is working rather than about one site.
   "jobs:read": ["owner"],
+
+  // Settings: everyone reads them (the capture forms need the age limit); only the owner
+  // changes them, because they change what every plant may capture.
+  "settings:read": ["owner", "manager", "worker"],
+  "settings:write": ["owner"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

@@ -6,9 +6,13 @@ import type {
   Mine,
   MineInput,
   MinePatch,
+  PoLine,
+  PoLineInput,
   PurchaseOrder,
   PurchaseOrderInput,
   PurchaseOrderPatch,
+  PurchaseOrderStatus,
+  Role,
   Stock,
   StockInput,
   StockLevel,
@@ -16,11 +20,13 @@ import type {
   StockLevelPatch,
   StockPatch,
   Notification,
+  UserSummary,
 } from "@reef/shared";
 import type { Machine } from "../src/services/service-due.js";
 import { createApp } from "../src/app.js";
 import { ApiError } from "../src/http/errors.js";
 import type { Repositories } from "../src/repositories/index.js";
+import type { PurchaseActionsRepository } from "../src/repositories/purchase-actions.js";
 import type {
   AnalyticsRepository,
   HistoryEntry,
@@ -40,9 +46,12 @@ import type {
   ScopedRepository,
   ServiceSweepRepository,
   SessionRepository,
+  Setting,
+  SettingsRepository,
   StockUsageRepository,
   UpdateResult,
   UserContext,
+  UserRepository,
   UserSession,
 } from "../src/repositories/types.js";
 
@@ -313,6 +322,56 @@ class MemorySessions implements SessionRepository {
   }
 }
 
+/**
+ * The stand-in for list_users and set_user_role: the three real roles, a reason, never leaving
+ * the platform without an owner, and the change written to the history.
+ */
+export class MemoryUsers implements UserRepository {
+  rows: UserSummary[] = Object.entries(USERS).map(([token, u]) => ({
+    id: u.id,
+    full_name: token.replace("-token", ""),
+    email: `${token.replace("-token", "")}@reef.test`,
+    role: (["owner", "manager", "worker"].find((r) => u.roles.includes(r)) ?? null) as Role | null,
+    plant: u.plant,
+    created_at: "2026-09-01T00:00:00Z",
+  }));
+
+  constructor(
+    private readonly history: MemoryHistory,
+    private readonly actor: () => string | null,
+  ) {}
+
+  async list() {
+    return this.rows.map((r) => ({ ...r }));
+  }
+
+  async setRole(userId: string, role: Role, reason: string) {
+    const row = this.rows.find((r) => r.id === userId);
+    if (!row) return null;
+    const owners = this.rows.filter((r) => r.role === "owner").length;
+    if (row.role === "owner" && role !== "owner" && owners <= 1) {
+      throw new ApiError(
+        "CONFLICT",
+        "There must always be at least one owner. Make someone else an owner first.",
+      );
+    }
+    if (row.role !== role) {
+      this.history.append({
+        table_name: "user_roles",
+        row_id: userId,
+        changed_by: this.actor() ?? "00000000-0000-0000-0000-000000000000",
+        reason,
+        plant: null,
+        old_values: { role: row.role },
+        new_values: { role },
+        version: this.history.rows.filter((h) => h.row_id === userId).length + 1,
+      });
+      row.role = role;
+    }
+    return { ...row };
+  }
+}
+
 export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPatch> {
   rows: Stock[] = [];
 
@@ -356,8 +415,12 @@ export class MemoryStock implements ScopedRepository<Stock, StockInput, StockPat
     patch: StockPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<Stock>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -426,8 +489,12 @@ export class MemoryStockLevel implements ScopedRepository<
     patch: StockLevelPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<StockLevel>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -500,8 +567,12 @@ export class MemoryPurchaseOrder implements ScopedRepository<
     patch: PurchaseOrderPatch,
     expectedVersion: number,
     user: UserContext,
+    reason: string,
   ): Promise<UpdateResult<PurchaseOrder>> {
     await tick();
+    if (!reason || reason.trim() === "") {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
+    }
     const row = this.rows.find((r) => r.id === id);
     if (!row) return { status: "missing" };
     if (user.role !== "owner" && row.plant !== user.plant) return { status: "missing" };
@@ -756,6 +827,109 @@ export class MemorySweep implements ServiceSweepRepository {
   }
 }
 
+/** Which status may follow which, as guard_po_status allows in the database. */
+const NEXT: Record<PurchaseOrderStatus, PurchaseOrderStatus[]> = {
+  draft: ["approved", "cancelled"],
+  approved: ["ordered", "received", "cancelled"],
+  ordered: ["received", "cancelled"],
+  received: [],
+  cancelled: [],
+};
+
+/**
+ * The stand-in for purchase order lines and po_transition. Visibility follows the T14 fake's
+ * plant rule; the line and status rules follow the database. `received` counts how often each
+ * order's stock was added, so a test can prove a delivery is never added twice.
+ */
+export class MemoryPurchaseActions implements PurchaseActionsRepository {
+  lines_: PoLine[] = [];
+  received = new Map<string, number>();
+
+  constructor(
+    private readonly orders: MemoryPurchaseOrder,
+    private readonly stock: MemoryStock,
+    private readonly user: () => UserContext,
+  ) {}
+
+  private order(poId: string) {
+    const row = this.orders.rows.find((r) => r.id === poId);
+    const u = this.user();
+    if (!row || (u.role !== "owner" && row.plant !== u.plant)) return null;
+    return row;
+  }
+
+  private draftOnly(status: PurchaseOrderStatus) {
+    if (status !== "draft") {
+      throw new ApiError(
+        "CONFLICT",
+        `Lines can only be changed while the order is a draft. This order is ${status}.`,
+      );
+    }
+  }
+
+  private retotal(poId: string) {
+    const row = this.orders.rows.find((r) => r.id === poId);
+    if (row) {
+      row.total_cost = this.lines_
+        .filter((l) => l.po_id === poId)
+        .reduce((sum, l) => sum + l.qty * l.unit_cost, 0);
+    }
+  }
+
+  async lines(poId: string) {
+    return this.order(poId) ? this.lines_.filter((l) => l.po_id === poId) : null;
+  }
+
+  async addLine(poId: string, line: PoLineInput) {
+    const order = this.order(poId);
+    if (!order) return null;
+    this.draftOnly(order.status);
+    const item = this.stock.rows.find((r) => r.id === line.stock_item_id);
+    if (!item || item.plant !== order.plant) {
+      throw new ApiError("NOT_FOUND", "That stock item is not at this order's plant");
+    }
+    const created: PoLine = {
+      id: randomUUID(),
+      po_id: poId,
+      stock_item_id: line.stock_item_id,
+      qty: line.qty,
+      unit_cost: line.unit_cost ?? Number(item.unit_cost ?? 0),
+    };
+    this.lines_.push(created);
+    this.retotal(poId);
+    return created;
+  }
+
+  async removeLine(poId: string, lineId: string) {
+    const order = this.order(poId);
+    if (!order) return null;
+    this.draftOnly(order.status);
+    const before = this.lines_.length;
+    this.lines_ = this.lines_.filter((l) => !(l.id === lineId && l.po_id === poId));
+    this.retotal(poId);
+    return this.lines_.length < before;
+  }
+
+  async transition(poId: string, to: PurchaseOrderStatus, reason?: string) {
+    const order = this.order(poId);
+    if (!order) return null;
+    if (order.status === to) throw new ApiError("CONFLICT", `This order is already ${to}.`);
+    if (!NEXT[order.status].includes(to)) {
+      throw new ApiError("CONFLICT", `An order that is ${order.status} cannot be marked ${to}.`);
+    }
+    if (to === "approved" && !this.lines_.some((l) => l.po_id === poId)) {
+      throw new ApiError("CONFLICT", "An order with no lines cannot be approved.");
+    }
+    if (to === "cancelled" && !reason?.trim()) {
+      throw new ApiError("VALIDATION_FAILED", "A reason is required when cancelling an order");
+    }
+    if (to === "received") this.received.set(poId, (this.received.get(poId) ?? 0) + 1);
+    order.status = to;
+    order.version += 1;
+    return { ...order };
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   // The signed-in user of the current request, which the history records as the actor, the
@@ -775,13 +949,16 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   production.audit = { table: "production_logs", history, actor };
   fuel.audit = { table: "fuel_slips", history, actor };
   maintenance.audit = { table: "maintenance_logs", history, actor };
+  // The signed-in user of the current request, for the purchase actions' plant rule.
+  let caller: UserContext = { role: "", plant: null };
+  const purchaseActions = new MemoryPurchaseActions(purchaseOrders, stock, () => caller);
   const usage: { stock_item_id: string; qty: number }[] = [];
   const photoRequests: string[] = [];
   const analytics = new MemoryAnalytics();
   const retention = new MemoryRetention();
   const notifications = new MemoryNotifications();
   const jobs = new MemoryJobs();
-
+  const users = new MemoryUsers(history, actor);
   const maintenanceParts: MaintenancePartsRepository = {
     forLog: async (logId) => maintenance.parts.filter((p) => p.maintenance_id === logId),
     add: async (logId, part) => maintenance.addPart(logId, part),
@@ -811,6 +988,26 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   };
 
   const sessionRows: UserSession[] = [];
+  const settingsStore: Setting[] = [
+    {
+      key: "capture_max_age_days",
+      value: 60,
+      description: "How many days old an entry may be when it is captured.",
+      updated_at: new Date().toISOString(),
+    },
+  ];
+  const settings: SettingsRepository = {
+    list: async () => settingsStore.map((x) => ({ ...x })),
+    captureMaxAgeDays: async () => Number(settingsStore[0].value),
+    set: async (key, value) => {
+      const row = settingsStore.find((x) => x.key === key);
+      if (!row) return null;
+      row.value = value;
+      row.updated_at = new Date().toISOString();
+      return { ...row };
+    },
+  };
+
   const logged: unknown[] = [];
 
   const { app, registry } = createApp({
@@ -831,13 +1028,19 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     repositories: (token) => {
       const user = USERS[token];
       currentUserId = user?.id ?? null;
+      caller = {
+        role: ["owner", "manager", "worker"].find((r) => user?.roles.includes(r)) ?? "",
+        plant: user?.plant ?? null,
+      };
       return {
         roles: {
           forUser: async () => user?.roles ?? [],
           plantFor: async () => user?.plant ?? null,
         },
         sessions: new MemorySessions(user?.id ?? "", sessionRows),
+        settings,
         history,
+        users,
         mines,
         production,
         fuel,
@@ -848,6 +1051,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         stock,
         stockLevels,
         purchaseOrders,
+        purchaseActions,
         analytics,
         retention,
         notifications,
@@ -885,6 +1089,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     app,
     registry,
     history,
+    users,
     mines,
     production,
     fuel,
@@ -894,11 +1099,13 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     stock,
     stockLevels,
     purchaseOrders,
-    sessionRows,
     analytics,
-    retention,
-    notifications,
     jobs,
+    notifications,
+    purchaseActions,
+    retention,
+    sessionRows,
+    settingsStore,
     logged,
     call,
   };
