@@ -82,9 +82,12 @@ export function AuthPage() {
 
   const quickLogin = async (testEmail: string) => {
     setLoading(true);
+    // Demo login against the dev seed. The password is public by design — every
+    // seeded user in scripts/seed-dev.mjs has it, and the accounts only exist in
+    // the dev database. Not a real credential.
     const { error } = await supabase.auth.signInWithPassword({
       email: testEmail,
-      password: "Reef2026!",
+      password: "Reef2026!", // secrets-check: allow
     });
     setLoading(false);
     if (error) return toast.error(error.message);
@@ -249,7 +252,7 @@ export function AuthPage() {
               className="lg:hidden mx-auto rounded-none px-4 py-3 border border-accent/30 animate-fade-up"
               style={{ backgroundColor: "#0d1b2a" }}
             >
-               <img src="/reef-logo-wide.png" alt="R.E.E.F" className="h-10 w-auto mx-auto" />
+              <img src="/reef-logo-wide.png" alt="R.E.E.F" className="h-10 w-auto mx-auto" />
             </div>
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-primary/20" />
