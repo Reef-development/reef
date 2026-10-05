@@ -144,46 +144,200 @@ describe("a repair and its parts, saved together", () => {
 });
 
 describe("stock usage", () => {
-  it("subtracts in one step and drafts a reorder when stock falls to the reorder point", async () => {
+  it("books stock out, records who took it, and creates a reorder request instead of a purchase order", async () => {
     const item = await db.query<{ id: string }>(
       "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, plant) VALUES ('V-belt', 6, 4, 10, 80, 'Kriel') RETURNING id",
     );
     const id = item.rows[0].id;
+
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, $2)", [id, 2]));
+
     expect(await qty(id)).toBe(4);
-    const lines = await db.query<{ qty: string; status: string }>(
-      "SELECT pl.qty, po.status FROM po_lines pl JOIN purchase_orders po ON po.id = pl.po_id WHERE pl.stock_item_id = $1",
+
+    const bookings = await db.query<{
+      stock_item_id: string;
+      user_id: string;
+      plant: string;
+      qty: string;
+      created_at: string;
+    }>(
+      `SELECT stock_item_id, user_id, plant, qty, created_at
+       FROM stock_bookings
+       WHERE stock_item_id = $1`,
       [id],
     );
-    expect(lines.rows).toHaveLength(1);
-    expect(lines.rows[0]).toMatchObject({ status: "draft" });
-    expect(Number(lines.rows[0].qty)).toBe(10);
+
+    expect(bookings.rows).toHaveLength(1);
+    expect(bookings.rows[0].stock_item_id).toBe(id);
+    expect(bookings.rows[0].user_id).toBe(worker);
+    expect(bookings.rows[0].plant).toBe("Kriel");
+    expect(Number(bookings.rows[0].qty)).toBe(2);
+    expect(bookings.rows[0].created_at).toBeTruthy();
+
+    const requests = await db.query<{
+      stock_item_id: string;
+      plant: string;
+      requested_qty: string;
+      status: string;
+    }>(
+      `SELECT stock_item_id, plant, requested_qty, status
+       FROM reorder_requests
+       WHERE stock_item_id = $1`,
+      [id],
+    );
+
+    expect(requests.rows).toHaveLength(1);
+    expect(requests.rows[0]).toMatchObject({
+      stock_item_id: id,
+      plant: "Kriel",
+      status: "open",
+    });
+    expect(Number(requests.rows[0].requested_qty)).toBe(10);
+
+    const orders = await db.query<{ n: string }>(
+      `SELECT count(*) n
+       FROM po_lines
+       WHERE stock_item_id = $1`,
+      [id],
+    );
+
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 
-  it("does not draft a second order line for an item already on a draft order", async () => {
+  it("does not create a second open reorder request while one already exists", async () => {
     const item = await db.query<{ id: string }>(
       "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, plant) VALUES ('Filter', 3, 4, 5, 60, 'Kriel') RETURNING id",
     );
     const id = item.rows[0].id;
+
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
-    const n = await db.query<{ n: string }>(
-      "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
+
+    const requests = await db.query<{ n: string }>(
+      `SELECT count(*) n
+       FROM reorder_requests
+       WHERE stock_item_id = $1
+         AND status = 'open'`,
       [id],
     );
-    expect(Number(n.rows[0].n)).toBe(1);
+
+    expect(Number(requests.rows[0].n)).toBe(1);
+
+    const orders = await db.query<{ n: string }>(
+      `SELECT count(*) n
+       FROM po_lines
+       WHERE stock_item_id = $1`,
+      [id],
+    );
+
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 
-  it("adds up two usages instead of one overwriting the other", async () => {
+  it("adds up two bookings instead of one overwriting the other", async () => {
     const item = await db.query<{ id: string }>(
       "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, plant) VALUES ('Bolt', 100, 0, 0, 'Kriel') RETURNING id",
     );
     const id = item.rows[0].id;
+
     await Promise.all([
       db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 7)", [id])),
       db.as(manager, (tx) => tx.query("SELECT record_stock_usage($1, 5)", [id])),
     ]);
+
     expect(await qty(id)).toBe(88);
+
+    const bookings = await db.query<{ user_id: string; qty: string }>(
+      `SELECT user_id, qty
+       FROM stock_bookings
+       WHERE stock_item_id = $1`,
+      [id],
+    );
+
+    expect(bookings.rows).toHaveLength(2);
+    expect(bookings.rows.map((row) => Number(row.qty)).sort((a, b) => a - b)).toEqual([5, 7]);
+  });
+
+  it("lets authorised management turn a reorder request into a purchase order", async () => {
+    const item = await db.query<{ id: string }>(
+      "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, plant) VALUES ('Pump seal', 5, 4, 6, 25, 'Kriel') RETURNING id",
+    );
+    const id = item.rows[0].id;
+
+    await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
+
+    const request = await db.query<{ id: string }>(
+      `SELECT id
+       FROM reorder_requests
+       WHERE stock_item_id = $1
+         AND status = 'open'`,
+      [id],
+    );
+
+    expect(request.rows).toHaveLength(1);
+
+    const result = await db.as(manager, (tx) =>
+      tx.query<{ id: string; status: string; plant: string }>(
+        "SELECT * FROM convert_reorder_request($1)",
+        [request.rows[0].id],
+      ),
+    );
+
+    expect(result.rows[0].status).toBe("draft");
+    expect(result.rows[0].plant).toBe("Kriel");
+
+    const converted = await db.query<{
+      status: string;
+      purchase_order_id: string | null;
+    }>(
+      `SELECT status, purchase_order_id
+       FROM reorder_requests
+       WHERE id = $1`,
+      [request.rows[0].id],
+    );
+
+    expect(converted.rows[0].status).toBe("converted");
+    expect(converted.rows[0].purchase_order_id).toBe(result.rows[0].id);
+
+    const line = await db.query<{ qty: string }>(
+      `SELECT qty
+       FROM po_lines
+       WHERE po_id = $1
+         AND stock_item_id = $2`,
+      [result.rows[0].id, id],
+    );
+
+    expect(line.rows).toHaveLength(1);
+    expect(Number(line.rows[0].qty)).toBe(6);
+  });
+
+  it("refuses a worker turning a reorder request into a purchase order", async () => {
+    const item = await db.query<{ id: string }>(
+      "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, plant) VALUES ('Worker refusal part', 5, 4, 6, 25, 'Kriel') RETURNING id",
+    );
+    const id = item.rows[0].id;
+
+    await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
+
+    const request = await db.query<{ id: string }>(
+      `SELECT id
+       FROM reorder_requests
+       WHERE stock_item_id = $1
+         AND status = 'open'`,
+      [id],
+    );
+
+    await expect(
+      db.as(worker, (tx) => tx.query("SELECT convert_reorder_request($1)", [request.rows[0].id])),
+    ).rejects.toThrow(/permission to raise a purchase order/);
+
+    const orders = await db.query<{ n: string }>(
+      `SELECT count(*) n
+       FROM po_lines
+       WHERE stock_item_id = $1`,
+      [id],
+    );
+
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 
   it("refuses zero or negative quantities", async () => {
@@ -206,7 +360,9 @@ describe("stock usage", () => {
         "INSERT INTO auth.users (email) VALUES ('x@test.local') RETURNING id",
       )
     ).rows[0].id;
+
     await db.query("DELETE FROM user_roles WHERE user_id = $1", [stranger]);
+
     await expect(
       db.as(stranger, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [bearingId])),
     ).rejects.toThrow(/no role/);
@@ -294,22 +450,29 @@ describe("T14: the stock rules work on each plant's own level", () => {
     expect(await qty(id)).toBe(10);
   });
 
-  it("raises a reorder on a draft for the item's plant", async () => {
+  it("raises a reorder request for the item's plant instead of drafting a purchase order", async () => {
     const id = await newItem("Seal kit", "Kriel", 3, 2, 6);
 
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
 
-    const { rows } = await db.query<{ plant: string; qty: string }>(
-      `SELECT po.plant, pl.qty
-       FROM po_lines pl
-       JOIN purchase_orders po ON po.id = pl.po_id
-       WHERE pl.stock_item_id = $1`,
+    const { rows } = await db.query<{ plant: string; requested_qty: string; status: string }>(
+      `SELECT plant, requested_qty, status
+     FROM reorder_requests
+     WHERE stock_item_id = $1`,
       [id],
     );
 
     expect(rows).toHaveLength(1);
     expect(rows[0].plant).toBe("Kriel");
-    expect(Number(rows[0].qty)).toBe(6);
+    expect(Number(rows[0].requested_qty)).toBe(6);
+    expect(rows[0].status).toBe("open");
+
+    const orders = await db.query<{ n: string }>(
+      "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
+      [id],
+    );
+
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 
   it("uses the plant's reorder point, not the old one on the item", async () => {
@@ -323,11 +486,21 @@ describe("T14: the stock rules work on each plant's own level", () => {
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
 
     const n = await db.query<{ n: string }>(
-      "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
+      `SELECT count(*) n
+     FROM reorder_requests
+     WHERE stock_item_id = $1
+       AND status = 'open'`,
       [id],
     );
 
     expect(Number(n.rows[0].n)).toBe(1);
+
+    const orders = await db.query<{ n: string }>(
+      "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
+      [id],
+    );
+
+    expect(Number(orders.rows[0].n)).toBe(0);
   });
 
   it("adds a received delivery to the plant's level", async () => {

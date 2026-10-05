@@ -28,6 +28,7 @@ import type {
   Repository,
   ReportRunRepository,
   RetentionRepository,
+  ReorderRequestRepository,
   RoleRepository,
   Row,
   ScopedRepository,
@@ -50,6 +51,7 @@ export type Repositories = {
   maintenance: Repository<Row, MaintenanceInput, MaintenancePatch>;
   maintenanceParts: MaintenancePartsRepository;
   stockUsage: StockUsageRepository;
+  reorderRequests: ReorderRequestRepository;
   photos: PhotoStore;
   stock: ScopedRepository<Stock, StockInput, StockPatch>;
   stockLevels: ScopedRepository<StockLevel, StockLevelInput, StockLevelPatch>;

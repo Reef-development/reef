@@ -21,6 +21,7 @@ import type {
   ReportRunRepository,
   RetentionRepository,
   RoleRepository,
+  ReorderRequestRepository,
   Row,
   SessionRepository,
   Setting,
@@ -218,6 +219,30 @@ export class SupabaseStockUsage implements StockUsageRepository {
       _item: stockItemId,
       _qty: qty,
     });
+    if (error) throw translate(error);
+    return data as Row;
+  }
+}
+
+export class SupabaseReorderRequestRepository implements ReorderRequestRepository {
+  constructor(private readonly db: SupabaseClient) {}
+
+  async listOpen(): Promise<Row[]> {
+    const { data, error } = await this.db
+      .from("reorder_requests")
+      .select("*")
+      .eq("status", "open")
+      .order("created_at", { ascending: false });
+
+    if (error) throw translate(error);
+    return (data ?? []) as Row[];
+  }
+
+  async convert(id: string): Promise<Row> {
+    const { data, error } = await this.db.rpc("convert_reorder_request", {
+      _request: id,
+    });
+
     if (error) throw translate(error);
     return data as Row;
   }
