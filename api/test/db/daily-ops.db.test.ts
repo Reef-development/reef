@@ -289,27 +289,36 @@ describe("T14: the stock rules work on each plant's own level", () => {
 
   it("adds a received delivery to the plant's level", async () => {
     const id = await newItem("Idler", "Kriel", 1, 0, 0);
+
     const po = await db.query<{ id: string }>(
-      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'Kriel') RETURNING id",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('draft', 'Kriel') RETURNING id",
     );
+
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 8, 50)",
       [po.rows[0].id, id],
     );
+
+    await db.query("UPDATE purchase_orders SET status = 'ordered' WHERE id = $1", [po.rows[0].id]);
+
     await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
+
     expect(await qty(id)).toBe(9);
   });
+
   it("does not add the same received delivery to stock twice", async () => {
     const id = await newItem("Bearing", "Kriel", 1, 0, 0);
 
     const po = await db.query<{ id: string }>(
-      "INSERT INTO purchase_orders (status, plant) VALUES ('ordered', 'Kriel') RETURNING id",
+      "INSERT INTO purchase_orders (status, plant) VALUES ('draft', 'Kriel') RETURNING id",
     );
 
     await db.query(
       "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 8, 50)",
       [po.rows[0].id, id],
     );
+
+    await db.query("UPDATE purchase_orders SET status = 'ordered' WHERE id = $1", [po.rows[0].id]);
 
     await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
 
@@ -319,6 +328,7 @@ describe("T14: the stock rules work on each plant's own level", () => {
 
     expect(await qty(id)).toBe(9);
   });
+
   it("keeps the prototype's old quantity column equal to the level, both ways", async () => {
     const id = await newItem("Pulley", "Kriel", 20);
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 5)", [id]));
