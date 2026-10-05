@@ -17,6 +17,12 @@ jobs:
     name: Deploy to production
     runs-on: ubuntu-latest
 
+    env:
+      # Supabase production runs Postgres 17. The PGDG repo installs the matching
+      # client tools at this path; the distro's default is 16, which pg_dump refuses
+      # to run against a 17 server.
+      PG_BIN: /usr/lib/postgresql/17/bin
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,12 +36,17 @@ jobs:
             shared/package-lock.json
             api/package-lock.json
 
-      # The deploy workflow uses psql to back up and to migrate. It is not installed on
-      # the runner by default.
-      - name: Install PostgreSQL client
+      # The deploy workflow uses psql and pg_dump to back up and to migrate. The
+      # distro package is Postgres 16; production runs 17. Install the matching
+      # client from the PostgreSQL Global Development Group repository.
+      - name: Install PostgreSQL client 17
         run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y postgresql-client-17
 
       # 1. Back up the live database. The dump is attached to the workflow run as an
       #    artefact, so it is available if the deploy needs to be reverted.
@@ -45,8 +56,17 @@ jobs:
         run: |
           mkdir -p backup
           TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          pg_dump "$DATABASE_OWNER_URL" --no-owner --no-privileges \
-            -f "backup/reef-prod-$TIMESTAMP.sql"
+          for i in 1 2 3; do
+            if "$PG_BIN/pg_dump" "$DATABASE_OWNER_URL" --no-owner --no-privileges \
+                 -f "backup/reef-prod-$TIMESTAMP.sql"; then
+              echo "Backup written to backup/reef-prod-$TIMESTAMP.sql"
+              exit 0
+            fi
+            echo "Backup attempt $i failed, retrying in 5s..."
+            sleep 5
+          done
+          echo "Backup failed after 3 attempts"
+          exit 1
 
       # 2. Refuse to continue if the backup is suspiciously small. A dump under 1 KB
       #    means something failed silently (wrong database, wrong user, empty schema)
@@ -59,7 +79,7 @@ jobs:
         run: |
           SIZE=$(stat -c%s backup/*.sql)
           echo "Backup size: $SIZE bytes"
-          TABLES=$(psql "$DATABASE_OWNER_URL" -tA -c "select count(*) from information_schema.tables where table_schema = 'public'")
+          TABLES=$("$PG_BIN/psql" "$DATABASE_OWNER_URL" -tA -c "select count(*) from information_schema.tables where table_schema = 'public'")
           echo "Public tables in the live database: $TABLES"
           if [ "$TABLES" -eq 0 ]; then
             echo "First deploy: no tables yet, backup size check skipped."
@@ -80,13 +100,32 @@ jobs:
       # 3. Apply every migration in order, as the owner user. The owner is the only
       #    role that can change the schema. The running API uses a different user
       #    (DATABASE_URL) that cannot alter tables.
+      #
+      #    Migrations are recorded in supabase_migrations.schema_migrations. A migration
+      #    already recorded there is skipped, so this step can run on every deploy
+      #    without re-applying what has already landed.
       - name: Apply migrations
         env:
           DATABASE_OWNER_URL: ${{ secrets.DATABASE_OWNER_URL }}
         run: |
+          "$PG_BIN/psql" "$DATABASE_OWNER_URL" -v ON_ERROR_STOP=1 -c "
+            create schema if not exists supabase_migrations;
+            create table if not exists supabase_migrations.schema_migrations (
+              version text primary key,
+              name text,
+              applied_at timestamptz default now()
+            );
+          "
           for file in $(ls supabase/migrations/*.sql | sort); do
+            VERSION=$(basename "$file" | cut -d_ -f1)
+            APPLIED=$("$PG_BIN/psql" "$DATABASE_OWNER_URL" -tA -c "select 1 from supabase_migrations.schema_migrations where version = '$VERSION' limit 1")
+            if [ "$APPLIED" = "1" ]; then
+              echo "Skipping $file (already applied)"
+              continue
+            fi
             echo "Applying $file"
-            psql "$DATABASE_OWNER_URL" -v ON_ERROR_STOP=1 -f "$file"
+            "$PG_BIN/psql" "$DATABASE_OWNER_URL" -v ON_ERROR_STOP=1 -f "$file"
+            "$PG_BIN/psql" "$DATABASE_OWNER_URL" -c "insert into supabase_migrations.schema_migrations (version, name) values ('$VERSION', '$(basename "$file" .sql)') on conflict (version) do nothing"
           done
 
       # 4. Build shared, then build the API. The API depends on the compiled output of
