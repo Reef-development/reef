@@ -1,5 +1,5 @@
 # REEF Operations Platform
-## Presenatation : https://youtu.be/d_Vj03qGSbs
+## Presentation : https://youtu.be/d_Vj03qGSbs
 An operations platform for **Resource Energy Engineering Fuels (REEF)**, a South African
 contract mining services company that runs coal washing plants across Mpumalanga.
 
