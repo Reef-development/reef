@@ -26,9 +26,22 @@ vi.mock("@/lib/api", () => ({
 // Tables not yet behind the API are still read straight from Supabase.
 vi.mock("@/integrations/supabase/client", () => {
   const rows: Record<string, unknown[]> = { equipment: [EQUIPMENT] };
+  // A read chains its filters (order, gte, limit) and is awaited at the end, as supabase-js is.
+  const read = (data: unknown[]) => {
+    const result = { data, error: null };
+    const chain: Record<string, unknown> = {
+      order: () => chain,
+      gte: () => chain,
+      limit: () => chain,
+      then: (ok: (r: typeof result) => unknown, bad?: (e: unknown) => unknown) =>
+        Promise.resolve(result).then(ok, bad),
+    };
+    return chain;
+  };
   const query = (table: string) => ({
     select: () => query(table),
-    order: async () => ({ data: rows[table] ?? [], error: null }),
+    gte: () => query(table),
+    order: () => read(rows[table] ?? []),
   });
   return { supabase: { from: (table: string) => query(table) } };
 });
@@ -65,21 +78,29 @@ describe("T18: the managers' log dialogs also save once per double tap", () => {
     await user.click(await screen.findByRole("button", { name: /Log production/ }));
     const dialog = await screen.findByRole("dialog");
     await pick(user, within(dialog).getAllByRole("combobox")[0], MINE.name);
-    fireEvent.change(dialog.querySelector('input[name="tons_produced"]')!, { target: { value: "300" } });
+    fireEvent.change(dialog.querySelector('input[name="tons_produced"]')!, {
+      target: { value: "300" },
+    });
     await doubleTapSave(dialog);
-    expect(sent.filter((s) => s.to === "/api/v1/production-logs" && s.method === "POST")).toHaveLength(1);
+    expect(
+      sent.filter((s) => s.to === "/api/v1/production-logs" && s.method === "POST"),
+    ).toHaveLength(1);
   });
 
   it("Add fuel slip", async () => {
     const { user } = await renderScreen(await pageOf("fuel"));
     await user.click(await screen.findByRole("button", { name: /Add slip/ }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(dialog.querySelector('input[name="vehicle_label"]')!, { target: { value: "LDV 3" } });
+    fireEvent.change(dialog.querySelector('input[name="vehicle_label"]')!, {
+      target: { value: "LDV 3" },
+    });
     const [litres, price] = within(dialog).getAllByRole("spinbutton");
     fireEvent.change(litres, { target: { value: "40" } });
     fireEvent.change(price, { target: { value: "22" } });
     await doubleTapSave(dialog);
-    expect(sent.filter((s) => s.to === "/api/v1/fuel-slips" && s.method === "POST")).toHaveLength(1);
+    expect(sent.filter((s) => s.to === "/api/v1/fuel-slips" && s.method === "POST")).toHaveLength(
+      1,
+    );
   });
 
   it("Log repair", async () => {
@@ -87,8 +108,12 @@ describe("T18: the managers' log dialogs also save once per double tap", () => {
     await user.click(await screen.findByRole("button", { name: /Log repair/ }));
     const dialog = await screen.findByRole("dialog");
     await pick(user, within(dialog).getAllByRole("combobox")[0], EQUIPMENT.name);
-    fireEvent.change(dialog.querySelector('input[name="description"]')!, { target: { value: "Replaced belt" } });
+    fireEvent.change(dialog.querySelector('input[name="description"]')!, {
+      target: { value: "Replaced belt" },
+    });
     await doubleTapSave(dialog);
-    expect(sent.filter((s) => s.to === "/api/v1/maintenance-logs" && s.method === "POST")).toHaveLength(1);
+    expect(
+      sent.filter((s) => s.to === "/api/v1/maintenance-logs" && s.method === "POST"),
+    ).toHaveLength(1);
   });
 });
