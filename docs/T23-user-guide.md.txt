@@ -1,0 +1,364 @@
+# REEF Operations Platform
+
+## T23 — User Guide & Plant Wall Quick-Reference Card
+
+| **Details** | **Information** |
+|---|---|
+| **Student** | Tlamelo Mothupi |
+| **Project** | REEF Operations Platform |
+| **Task** | T23 — User Guide and Plant Wall Card |
+| **Reviewed by** | Bradley |
+| **Date** | 2026 |
+
+---
+
+# 1. Introduction
+
+The **REEF Operations Platform** provides different functionality according to the user's role within the organisation.
+
+This guide provides practical instructions for the three main user roles:
+
+- **Plant Worker**
+- **Site Manager**
+- **Owner**
+
+A **Plant Wall Quick-Reference Card** is also included to provide plant workers with concise instructions for capturing operational information, particularly when network connectivity is unavailable.
+
+---
+
+# 2. Plant Worker User Guide
+
+## 2.1 Purpose
+
+Plant workers use REEF primarily to capture operational information from the plant or work site.
+
+The worker is responsible for entering accurate information and confirming that the application has processed the entry correctly.
+
+---
+
+## 2.2 Signing In
+
+To access REEF:
+
+1. Open the REEF application.
+2. Enter your user credentials.
+3. Sign in.
+4. Wait for the worker dashboard to load.
+5. Select the required operational function.
+
+> **Important:** Only use your own account. Do not share your login credentials with another person.
+
+---
+
+## 2.3 Capturing Operational Information
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the relevant capture function. |
+| **2** | Enter all required information. |
+| **3** | Check that the information is correct. |
+| **4** | Select **Save** or **Submit**. |
+| **5** | Wait for the application to process the entry. |
+| **6** | Confirm that the information was saved successfully. |
+
+> **Important:** Do not submit the same information multiple times.
+
+---
+
+## 2.4 Capturing Information When There Is No Network
+
+If network connectivity is unavailable, follow the procedure below.
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Complete the capture form. |
+| **2** | Enter all required information. |
+| **3** | Select **Save** or **Submit**. |
+| **4** | Observe the status displayed by the application. |
+| **5** | Do not repeatedly submit the same entry. |
+| **6** | Restore network connectivity if authentication or server communication is required. |
+
+During testing of the current REEF application, an offline submission displayed a **"Saving..."** state.
+
+The application did **not** display a separate **"Waiting to Send"**, **"Queued"**, or **"Pending"** status.
+
+### Offline Status
+
+| **Status** | **Observed During Testing** |
+|---|---|
+| **Saving...** | ✅ Yes |
+| **Waiting to Send** | ❌ No |
+| **Queued** | ❌ No |
+| **Pending** | ❌ No |
+
+> **Important:** Workers should not assume that an entry has been queued for synchronisation unless the application explicitly confirms this.
+
+---
+
+## 2.5 When the Network Connection Returns
+
+After network connectivity has been restored:
+
+1. Return to the REEF application.
+2. Sign in again if the application requests authentication.
+3. Check whether the previous entry was saved.
+4. If the entry was successfully saved, **do not create another copy**.
+5. If the entry was not saved, capture the information again.
+6. Contact the Site Manager or supervisor if you are uncertain.
+
+---
+
+## 2.6 If REEF Returns to the Authorising Page
+
+If REEF returns to the **Authorising** page while offline:
+
+1. Do not repeatedly attempt to log in.
+2. Restore network connectivity.
+3. Return to REEF.
+4. Sign in again if required.
+5. Check whether the original record was saved.
+6. Only submit the information again if it was not saved.
+
+---
+
+# 3. Site Manager User Guide
+
+## 3.1 Purpose
+
+The **Site Manager** is responsible for managing operational information and performing management activities within REEF.
+
+| **Management Area** | **Responsibility** |
+|---|---|
+| Operational records | Review and correct records |
+| Purchasing | Review and manage purchase orders |
+| Operational costs | Review Cost per Ton information |
+
+---
+
+## 3.2 Signing In
+
+1. Open REEF.
+2. Sign in using the Site Manager account.
+3. Wait for the manager dashboard to load.
+4. Select the required management function.
+
+> The available functionality depends on the permissions assigned to the Site Manager account.
+
+---
+
+## 3.3 Reviewing and Correcting a Record
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the relevant records section. |
+| **2** | Locate the record requiring correction. |
+| **3** | Open the record. |
+| **4** | Select the **Edit** or correction option. |
+| **5** | Update the incorrect information. |
+| **6** | Review the changes carefully. |
+| **7** | Save the record. |
+| **8** | Confirm that the updated information is displayed correctly. |
+
+> **Important:** Only make legitimate corrections and verify the information before saving.
+
+---
+
+## 3.4 Managing Purchase Orders
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the **Purchasing** section. |
+| **2** | Locate the relevant purchase order. |
+| **3** | Review the supplier and order information. |
+| **4** | Review the items, quantities and costs. |
+| **5** | Confirm that the order information is correct. |
+| **6** | Select **Approve** where the Site Manager has permission. |
+| **7** | Confirm that the order status has been updated. |
+
+> **Important:** Purchase orders should be reviewed carefully before approval.
+
+---
+
+## 3.5 Reviewing Cost per Ton
+
+1. Open the relevant reporting or operational section.
+2. Locate the **Cost per Ton** information.
+3. Review the displayed value.
+4. Compare it with the relevant operational context.
+5. Use the information to support operational decision-making.
+
+---
+
+# 4. Owner User Guide
+
+## 4.1 Purpose
+
+The **Owner** has access to higher-level management and reporting functionality.
+
+| **Function** | **Purpose** |
+|---|---|
+| **Site Comparison** | Compare information across operational sites |
+| **History** | Review historical operational information |
+| **User Management** | Manage users where authorised |
+
+---
+
+## 4.2 Signing In
+
+1. Open the REEF application.
+2. Sign in using the Owner account.
+3. Wait for the Owner dashboard to load.
+4. Select the required management or reporting function.
+
+---
+
+## 4.3 Comparing Sites
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the **Site Comparison** section. |
+| **2** | Select the relevant sites or comparison criteria. |
+| **3** | Review the information displayed by the system. |
+| **4** | Compare the relevant operational information. |
+| **5** | Use the results to support management decisions. |
+
+---
+
+## 4.4 Viewing Historical Information
+
+1. Open the **History** section.
+2. Select the relevant period, record or information type.
+3. Review the historical information.
+4. Compare previous information where necessary.
+5. Use the information to understand previous operational activity.
+
+---
+
+## 4.5 Adding a User
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the **User Management** section. |
+| **2** | Select **Add User**. |
+| **3** | Enter the required user information. |
+| **4** | Select the appropriate user role. |
+| **5** | Review the information. |
+| **6** | Save the new user. |
+| **7** | Confirm that the user appears in the user list. |
+
+> **Important:** Assign users only the role and permissions required for their responsibilities.
+
+---
+
+# 5. Plant Wall Quick-Reference Card
+
+# 🌱 REEF PLANT WALL
+
+## WORKER QUICK GUIDE
+
+### CAPTURE → SAVE → CHECK
+
+---
+
+## 5.1 Need to Capture Information?
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Open the relevant REEF capture form. |
+| **2** | Enter the required information. |
+| **3** | Check that the information is correct. |
+| **4** | Select **Save** or **Submit**. |
+| **5** | Wait for the application to process the entry. |
+
+---
+
+## 5.2 No Network Connection?
+
+> **DO NOT PANIC.**
+
+Complete the capture form normally and select **Save/Submit**.
+
+If the application displays:
+
+> **"Saving..."**
+
+wait and observe the application.
+
+### ⚠️ DO NOT SUBMIT THE SAME ENTRY MULTIPLE TIMES.
+
+---
+
+## 5.3 REEF Returns to "Authorising"?
+
+| **Step** | **Action** |
+|---:|---|
+| **1** | Restore the network connection. |
+| **2** | Return to REEF. |
+| **3** | Sign in again if required. |
+| **4** | Check whether the original entry was saved. |
+| **5** | Only submit again if the original entry was not saved. |
+
+---
+
+## 5.4 Network Connection Restored?
+
+1. Check the relevant record.
+2. Confirm whether the information was saved.
+3. Do not create a duplicate entry.
+4. Contact the Site Manager or supervisor if you are unsure.
+
+---
+
+## 5.5 Important Offline Information
+
+The tested version of REEF does **not** currently display:
+
+| **Status** | **Available?** |
+|---|---|
+| **Saving...** | ✅ Yes |
+| **Waiting to Send** | ❌ No |
+| **Queued** | ❌ No |
+| **Pending** | ❌ No |
+
+> **Important:** Do not assume that an entry has been queued for later synchronisation unless REEF explicitly confirms this.
+
+---
+
+# 6. Quick Reference
+
+| **Situation** | **What to Do** |
+|---|---|
+| 🟢 **Network available** | Capture and save the entry normally. |
+| 🟠 **No network** | Complete the form and attempt to save. |
+| 🟡 **"Saving..." displayed** | Wait and observe. Do not repeatedly submit. |
+| 🔴 **Returned to Authorising** | Restore the connection and authenticate again. |
+| 🔵 **Connection restored** | Check whether the original entry was saved. |
+| ❓ **Unsure whether saved** | Check the record or contact the supervisor. |
+| ✅ **Entry successfully saved** | No further submission is required. |
+
+---
+
+# 7. General User Responsibilities
+
+| **Responsibility** | **Requirement** |
+|---|---|
+| **Account security** | Use your own account and keep credentials confidential. |
+| **Data accuracy** | Enter and review information carefully. |
+| **Duplicate prevention** | Do not repeatedly submit the same entry. |
+| **Permissions** | Only perform functions allowed by your assigned role. |
+| **Connectivity issues** | Follow the offline procedure described in this guide. |
+| **Problems** | Report unresolved issues to the Site Manager or appropriate supervisor. |
+
+---
+
+# 8. Conclusion
+
+This guide provides role-specific instructions for **Plant Workers, Site Managers and Owners**.
+
+The Plant Wall Quick-Reference Card provides workers with a concise procedure for capturing information and responding to network connectivity problems.
+
+The offline testing conducted on the current version of REEF showed a **"Saving..."** state during an offline capture attempt and, in some cases, a return to the **Authorising** page when authentication was required.
+
+The application did **not** provide a visible **Waiting to Send**, **Queued**, or **Pending** status.
+
+The guide therefore documents the application's **observed behaviour** rather than describing functionality that is not currently visible to the user.
