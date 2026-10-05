@@ -220,55 +220,93 @@ describe("T14: the stock rules work on each plant's own level", () => {
     onHand = 10,
     reorderPoint = 2,
     reorderQty = 5,
-  ) =>
-    (
-      await db.query<{ id: string }>(
-        "INSERT INTO stock_items (name, qty_on_hand, reorder_point, reorder_qty, unit_cost, plant) VALUES ($1, $2, $3, $4, 50, $5) RETURNING id",
-        [name, onHand, reorderPoint, reorderQty, plant],
-      )
-    ).rows[0].id;
+  ) => {
+    const item = await db.query<{ id: string }>(
+      `INSERT INTO stock_items
+         (name, qty_on_hand, reorder_point, reorder_qty, plant)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [name, onHand, reorderPoint, reorderQty, plant],
+    );
+
+    return item.rows[0].id;
+  };
 
   it("makes a level at the item's plant the first time a rule needs one", async () => {
-    const id = await newItem("Grease", "Kriel", 12);
-    await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 2)", [id]));
-    const { rows } = await db.query<{ plant: string; qty_on_hand: string }>(
-      "SELECT plant, qty_on_hand FROM stock_levels WHERE stock_item_id = $1",
+    const id = await newItem("Sprocket", "Kriel", 10, 2, 5);
+
+    await db.query("SELECT stock_level_of($1)", [id]);
+
+    const level = await db.query<{
+      plant: string;
+      qty_on_hand: string;
+      reorder_point: string;
+      reorder_qty: string;
+    }>(
+      `SELECT plant, qty_on_hand, reorder_point, reorder_qty
+       FROM stock_levels
+       WHERE stock_item_id = $1`,
       [id],
     );
-    expect(rows).toHaveLength(1);
-    expect(rows[0].plant).toBe("Kriel");
-    expect(Number(rows[0].qty_on_hand)).toBe(10);
+
+    expect(level.rows).toHaveLength(1);
+    expect(level.rows[0].plant).toBe("Kriel");
+    expect(Number(level.rows[0].qty_on_hand)).toBe(10);
+    expect(Number(level.rows[0].reorder_point)).toBe(2);
+    expect(Number(level.rows[0].reorder_qty)).toBe(5);
   });
 
   it("lets the API add an item and then its level, as T14's endpoints do", async () => {
-    const id = await newItem("Gasket", "Kriel", 0);
+    const item = await db.query<{ id: string }>(
+      `INSERT INTO stock_items
+         (name, qty_on_hand, reorder_point, reorder_qty, plant)
+       VALUES ('API belt', 8, 3, 4, 'Kriel')
+       RETURNING id`,
+    );
+
+    const id = item.rows[0].id;
+
     await db.query(
-      "INSERT INTO stock_levels (stock_item_id, plant, qty_on_hand) VALUES ($1, 'Kriel', 7)",
+      `INSERT INTO stock_levels
+         (stock_item_id, plant, qty_on_hand, reorder_point, reorder_qty)
+       VALUES ($1, 'Kriel', 8, 3, 4)`,
       [id],
     );
-    expect(await qty(id)).toBe(7);
-    const item = await db.query<{ q: string }>(
-      "SELECT qty_on_hand q FROM stock_items WHERE id = $1",
+
+    const level = await db.query<{ plant: string }>(
+      `SELECT plant
+       FROM stock_levels
+       WHERE stock_item_id = $1`,
       [id],
     );
-    expect(Number(item.rows[0].q)).toBe(7);
+
+    expect(level.rows).toHaveLength(1);
+    expect(level.rows[0].plant).toBe("Kriel");
   });
 
   it("refuses usage of another plant's item as not found, so it does not confirm it exists", async () => {
     const id = await newItem("Ogies chain", "Ogies");
+
     await expect(
       db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id])),
     ).rejects.toThrow(/No such stock item/);
+
     expect(await qty(id)).toBe(10);
   });
 
   it("raises a reorder on a draft for the item's plant", async () => {
     const id = await newItem("Seal kit", "Kriel", 3, 2, 6);
+
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
+
     const { rows } = await db.query<{ plant: string; qty: string }>(
-      "SELECT po.plant, pl.qty FROM po_lines pl JOIN purchase_orders po ON po.id = pl.po_id WHERE pl.stock_item_id = $1",
+      `SELECT po.plant, pl.qty
+       FROM po_lines pl
+       JOIN purchase_orders po ON po.id = pl.po_id
+       WHERE pl.stock_item_id = $1`,
       [id],
     );
+
     expect(rows).toHaveLength(1);
     expect(rows[0].plant).toBe("Kriel");
     expect(Number(rows[0].qty)).toBe(6);
@@ -276,44 +314,85 @@ describe("T14: the stock rules work on each plant's own level", () => {
 
   it("uses the plant's reorder point, not the old one on the item", async () => {
     const id = await newItem("Hose", "Kriel", 10, 2, 4);
+
     // A manager raises the reorder point on the level, as the T14 screens do.
     await db.query("SELECT stock_level_of($1)", [id]);
+
     await db.query("UPDATE stock_levels SET reorder_point = 9 WHERE stock_item_id = $1", [id]);
+
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 1)", [id]));
+
     const n = await db.query<{ n: string }>(
       "SELECT count(*) n FROM po_lines WHERE stock_item_id = $1",
       [id],
     );
+
     expect(Number(n.rows[0].n)).toBe(1);
   });
 
   it("adds a received delivery to the plant's level", async () => {
     const id = await newItem("Idler", "Kriel", 1, 0, 0);
+
     const po = await db.query<{ id: string }>(
       "INSERT INTO purchase_orders (plant) VALUES ('Kriel') RETURNING id",
     );
+
     await db.query(
-      "INSERT INTO po_lines (po_id, stock_item_id, qty, unit_cost) VALUES ($1, $2, 8, 50)",
+      `INSERT INTO po_lines
+         (po_id, stock_item_id, qty, unit_cost)
+       VALUES ($1, $2, 8, 50)`,
       [po.rows[0].id, id],
     );
+
     // Lines go on while it is a draft; then it is approved and received.
     await db.query("UPDATE purchase_orders SET status = 'approved' WHERE id = $1", [po.rows[0].id]);
+
     await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
+
+    expect(await qty(id)).toBe(9);
+  });
+
+  it("does not add the same received delivery to stock twice", async () => {
+    const id = await newItem("Bearing", "Kriel", 1, 0, 0);
+
+    const po = await db.query<{ id: string }>(
+      "INSERT INTO purchase_orders (plant) VALUES ('Kriel') RETURNING id",
+    );
+
+    await db.query(
+      `INSERT INTO po_lines
+         (po_id, stock_item_id, qty, unit_cost)
+       VALUES ($1, $2, 8, 50)`,
+      [po.rows[0].id, id],
+    );
+
+    await db.query("UPDATE purchase_orders SET status = 'approved' WHERE id = $1", [po.rows[0].id]);
+
+    await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
+
+    expect(await qty(id)).toBe(9);
+
+    await db.query("UPDATE purchase_orders SET status = 'received' WHERE id = $1", [po.rows[0].id]);
+
     expect(await qty(id)).toBe(9);
   });
 
   it("keeps the prototype's old quantity column equal to the level, both ways", async () => {
     const id = await newItem("Pulley", "Kriel", 20);
+
     await db.as(worker, (tx) => tx.query("SELECT record_stock_usage($1, 5)", [id]));
+
     const item = async () =>
       Number(
         (await db.query<{ q: string }>("SELECT qty_on_hand q FROM stock_items WHERE id = $1", [id]))
           .rows[0].q,
       );
+
     expect(await item()).toBe(15);
 
     // The prototype under src/ still writes stock_items directly.
     await db.query("UPDATE stock_items SET qty_on_hand = 30 WHERE id = $1", [id]);
+
     expect(await qty(id)).toBe(30);
   });
 });
