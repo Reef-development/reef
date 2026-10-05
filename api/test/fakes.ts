@@ -36,6 +36,7 @@ import type {
   MaintenancePartsRepository,
   NotificationDraft,
   NotificationRepository,
+  ReorderRequestRepository,
   Page,
   Period,
   PhotoStore,
@@ -930,6 +931,23 @@ export class MemoryPurchaseActions implements PurchaseActionsRepository {
   }
 }
 
+/**
+ * The stand-in for reorder_requests (T14B). The database proves the real rules; here a test can
+ * put open requests in `rows` and see a conversion turn one into a draft order.
+ */
+export class MemoryReorderRequests implements ReorderRequestRepository {
+  rows: ({ id: string } & Record<string, unknown>)[] = [];
+  async listOpen() {
+    return this.rows.filter((r) => r.status === "open").map((r) => ({ ...r }));
+  }
+  async convert(id: string) {
+    const request = this.rows.find((r) => r.id === id && r.status === "open");
+    if (!request) throw new ApiError("NOT_FOUND", "No such open reorder request");
+    request.status = "converted";
+    return { id: randomUUID(), status: "draft", plant: request.plant ?? null };
+  }
+}
+
 export function testApp(overrides: Partial<Repositories> = {}) {
   const history = new MemoryHistory();
   // The signed-in user of the current request, which the history records as the actor, the
@@ -958,6 +976,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
   const retention = new MemoryRetention();
   const notifications = new MemoryNotifications();
   const jobs = new MemoryJobs();
+  const reorderRequests = new MemoryReorderRequests();
   const users = new MemoryUsers(history, actor);
   const maintenanceParts: MaintenancePartsRepository = {
     forLog: async (logId) => maintenance.parts.filter((p) => p.maintenance_id === logId),
@@ -1056,6 +1075,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         retention,
         notifications,
         jobs,
+        reorderRequests,
         ...overrides,
       };
     },
@@ -1101,6 +1121,7 @@ export function testApp(overrides: Partial<Repositories> = {}) {
     purchaseOrders,
     analytics,
     jobs,
+    reorderRequests,
     notifications,
     purchaseActions,
     retention,
