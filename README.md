@@ -32,7 +32,7 @@ needs, and works the answers out automatically.
 
 | What | Address |
 |---|---|
-| Web app | **TODO: Vercel URL** |
+| Web app | **https://reef-joe-d0a1.vercel.app/** |
 | API | **TODO: Render URL** (health check: `/health`) |
 | Presentation | **TODO: slides / video link** |
 
