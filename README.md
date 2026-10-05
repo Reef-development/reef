@@ -41,8 +41,8 @@ buttons on the sign-in screen:
 
 | Role | Email | Password |
 |---|---|---|
-| Owner (sees every plant, analytics and admin) | `owner@reef.co.za` | `Reef2026!` |
-| Worker (captures daily entries for one plant) | `worker1@reef.co.za` | `Reef2026!` |
+| Owner (sees every plant, analytics and admin) | `owner@reef.co.za` | `Reef2026.` |
+| Worker (captures daily entries for one plant) | `worker1@reef.co.za` | `Reef2026.` |
 
 The password is case-sensitive: capital **R**, ending in **!**. These accounts hold demo data
 only and are not real credentials.
