@@ -41,15 +41,28 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<{ da
   return body;
 }
 
-/** Reads every page of a list endpoint. Lists are paged at 200 rows at most per request. */
-export async function apiListAll<T>(path: string, params: Record<string, string> = {}): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 1; ; page++) {
-    const qs = new URLSearchParams({ ...params, page: String(page), pageSize: "200" });
-    const res = await api<T[]>(`${path}?${qs}`);
-    rows.push(...res.data);
-    if (!res.meta || rows.length >= res.meta.total || res.data.length === 0) return rows;
-  }
+/**
+ * Reads a single page of a list endpoint.
+ *
+ * The server pages its lists. This asks for one bounded page — 500 rows by default — instead
+ * of looping through every page. Looping fetched the entire table across dozens of sequential
+ * HTTP requests; on a table with years of history that took tens of seconds. A list screen only
+ * needs enough rows to be useful, and the 90-day window in `useList` handles the rest.
+ *
+ * Pass `pageSize` in `params` to override the size, or `page` to fetch a specific page.
+ */
+export async function apiListAll<T>(
+  path: string,
+  params: Record<string, string | number> = {},
+): Promise<T[]> {
+  const { page = 1, pageSize = 500, ...rest } = params;
+  const qs = new URLSearchParams({
+    ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, String(v)])),
+    page: String(page),
+    pageSize: String(pageSize),
+  });
+  const res = await api<T[]>(`${path}?${qs}`);
+  return res.data;
 }
 
 /** `plant` is the person's plant (T14). It is null for the owner, who works across every plant. */

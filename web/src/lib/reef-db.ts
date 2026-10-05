@@ -29,13 +29,53 @@ const API_PATHS: Partial<Record<TableName, string>> = {
  */
 const SERVER_FIELDS = ["id", "created_at", "updated_at"];
 
-export function useList<T = any>(table: TableName, orderBy = "created_at", asc = false) {
+/**
+ * Columns that hold a date or timestamp. When a list is sorted by one of these, `useList`
+ * restricts the query to the last `days` window so the browser isn't asked to render years
+ * of history at once.
+ */
+const DATE_COLUMNS = new Set(["date", "month", "start_time", "created_at", "updated_at"]);
+
+/** Default window for date-ordered lists. Enough for a screen; small enough to load fast. */
+const DEFAULT_LIST_DAYS = 90;
+
+/** Default cap on rows returned. Guards against any single screen loading tens of thousands. */
+const DEFAULT_LIST_LIMIT = 500;
+
+export type ListOptions = { days?: number; limit?: number };
+
+export function useList<T = any>(
+  table: TableName,
+  orderBy = "created_at",
+  asc = false,
+  opts: ListOptions = {},
+) {
+  const isDateOrdered = DATE_COLUMNS.has(orderBy);
+  const days = opts.days ?? DEFAULT_LIST_DAYS;
+  const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
+
   return useQuery({
-    queryKey: [table, "list", orderBy, asc],
+    queryKey: [table, "list", orderBy, asc, days, limit],
     queryFn: async () => {
       const path = API_PATHS[table];
-      if (path) return apiListAll<T>(path, { sort: orderBy, order: asc ? "asc" : "desc" });
-      const { data, error } = await supabase.from(table as any).select("*").order(orderBy, { ascending: asc });
+      if (path) {
+        // The API already caps and paginates. Ask for one bounded page, not every row.
+        return apiListAll<T>(path, {
+          sort: orderBy,
+          order: asc ? "asc" : "desc",
+          limit,
+        });
+      }
+      let q = supabase.from(table as any).select("*");
+      if (isDateOrdered && days > 0) {
+        const since = new Date(Date.now() - days * 864e5)
+          .toISOString()
+          .slice(0, 10);
+        q = q.gte(orderBy, since);
+      }
+      const { data, error } = await q
+        .order(orderBy, { ascending: asc })
+        .limit(limit);
       if (error) throw error;
       return (data ?? []) as T[];
     },
