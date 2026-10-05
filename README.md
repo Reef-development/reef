@@ -30,7 +30,12 @@ needs, and works the answers out automatically.
 
 ## Live system and demo accounts
 
-**Web app:** https://reef-joe-d0a1.vercel.app/
+| Link | Address |
+|---|---|
+| Web app | https://reef-joe-d0a1.vercel.app/ |
+| Team repository | https://github.com/Reef-development/reef |
+| Submission repository | https://github.com/EMGPRS/insy7315-2026-task-2-usmartayler |
+| CI/CD runs | https://github.com/Reef-development/reef/actions |
 
 Sign in with one of these demo accounts:
 
