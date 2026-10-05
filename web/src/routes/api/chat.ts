@@ -39,6 +39,7 @@ Rules:
 - If the user asks why a figure changed ("why this month") and the tool returns previous_period: use its values to explain the movement. Quote the numbers, not the field names. Never write identifiers like "previous_period.cost_per_ton_change_pct" in the answer — write "3.72%" instead. If previous_period is missing or its change fields are null, say plainly that you can only show the current composition, not the change.
 - For headcount and staff questions, use the headcount tool. Do not guess how many employees REEF has. Quote only the total and the shift breakdown.
 - For "which equipment is closest to end of life" questions, use the equipment_by_life_used array from the maintenance_status tool. Quote the percentages exactly as returned, in the order returned.
+- For downtime questions ("which mine has the most downtime", "downtime hours per mine", "downtime reasons"), use the downtime_by_mine tool. Quote hours and cost exactly as returned, and name the window.
 - If a question cannot be answered from the tools you have, say so plainly and suggest what data would need to be captured. Do not invent an answer.
 - Only attribute a figure to what the tool result calls it. If the tool returns a total across all equipment, do not claim it is specific to one type. If the user asks for a subset the tools cannot isolate, say so and stop. Do not present the total as an answer to a subset question.
 - Currency is South African Rand; format as R1 234.56. Tonnes are metric.
@@ -185,8 +186,13 @@ export const Route = createFileRoute("/api/chat")({
           .maybeSingle();
         if (!thread) return new Response("Thread not found", { status: 404 });
 
-        const key = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
-        if (!key) return new Response("Missing VITE_GROQ_API_KEY", { status: 500 });
+        // Prefer the server-side variable; fall back to the Vite one for local dev.
+        // VITE_-prefixed vars are inlined into the browser bundle, so in production
+        // only GROQ_API_KEY (server-only) should be set.
+        const key =
+          (typeof process !== "undefined" ? process.env?.GROQ_API_KEY : undefined) ??
+          (import.meta.env.VITE_GROQ_API_KEY as string | undefined);
+        if (!key) return new Response("Missing GROQ_API_KEY", { status: 500 });
 
         const uiMessages = messages as UIMessage[];
         const last = uiMessages[uiMessages.length - 1];
@@ -352,6 +358,96 @@ export const Route = createFileRoute("/api/chat")({
                 };
               },
             }),
+            downtime_by_mine: recordTool("downtime_by_mine", {
+              description:
+                "Downtime events grouped by mine over a look-back window. Use this for questions about which mine has the most downtime, downtime hours per mine, downtime cost per mine, or the reasons for downtime at each mine.",
+              inputSchema: z.object({
+                days: z.number().optional().describe("Look-back window in days, default 30"),
+                mine_name: z
+                  .string()
+                  .optional()
+                  .describe("Optional: restrict to one mine by name"),
+              }),
+              execute: async ({
+                days,
+                mine_name,
+              }: {
+                days?: number;
+                mine_name?: string;
+              }) => {
+                const windowDays = days ?? 30;
+                const since = new Date(Date.now() - windowDays * 864e5)
+                  .toISOString()
+                  .slice(0, 10);
+
+                const [{ data: events }, { data: mines }] = await Promise.all([
+                  supabase
+                    .from("downtime_events")
+                    .select("mine_id, reason, duration_hours, estimated_cost, start_time")
+                    .gte("start_time", since)
+                    .order("start_time", { ascending: false }),
+                  supabase.from("mines").select("id, name, location, active"),
+                ]);
+
+                const mineById = new Map((mines ?? []).map((m) => [m.id, m]));
+
+                const byMine: Record<
+                  string,
+                  {
+                    hours: number;
+                    cost: number;
+                    events: number;
+                    reasons: Record<string, number>;
+                  }
+                > = {};
+
+                for (const e of events ?? []) {
+                  const mine = mineById.get(e.mine_id ?? "");
+                  const name = mine?.name ?? "unknown";
+                  if (mine_name && name !== mine_name) continue;
+
+                  if (!byMine[name]) {
+                    byMine[name] = { hours: 0, cost: 0, events: 0, reasons: {} };
+                  }
+                  const h = Number(e.duration_hours ?? 0);
+                  byMine[name].hours += h;
+                  byMine[name].cost += Number(e.estimated_cost ?? 0);
+                  byMine[name].events += 1;
+                  const reason = e.reason ?? "unknown";
+                  byMine[name].reasons[reason] = (byMine[name].reasons[reason] ?? 0) + h;
+                }
+
+                const ranked = Object.entries(byMine)
+                  .map(([name, v]) => ({
+                    mine: name,
+                    hours: Math.round(v.hours * 100) / 100,
+                    cost: Math.round(v.cost * 100) / 100,
+                    events: v.events,
+                    reasons: Object.fromEntries(
+                      Object.entries(v.reasons).map(([r, h]) => [
+                        r,
+                        Math.round(h * 100) / 100,
+                      ]),
+                    ),
+                  }))
+                  .sort((a, b) => b.hours - a.hours);
+
+                return {
+                  window_days: windowDays,
+                  filter: mine_name ?? null,
+                  total_events: (events ?? []).length,
+                  by_mine: ranked,
+                  _scope: {
+                    covers: `downtime_events grouped by mine for the last ${windowDays} days: hours lost, estimated cost in rand, event count, and reason breakdown per mine`,
+                    doesNotCover: [
+                      "per-equipment downtime (only per mine)",
+                      "downtime for mines not in the returned by_mine list",
+                      "future downtime forecasts",
+                    ],
+                  },
+                };
+              },
+            }),
             production_and_costs: recordTool("production_and_costs", {
               description:
                 "Tonnes produced, variable costs (split into magnetite and overtime), maintenance costs, static costs (grouped by category), and rand-per-ton for the last N completed calendar months. Also returns the previous N months' totals and the change in cost per ton for comparison.",
@@ -450,7 +546,6 @@ export const Route = createFileRoute("/api/chat")({
                     ? currentCostPerTon - prevCostPerTon
                     : null;
 
-                // Data-gap notes: tell the model what's missing so it doesn't misreport.
                 const dataNotes: string[] = [];
                 if (prevTons === 0) {
                   dataNotes.push(
