@@ -57,7 +57,7 @@ only and are not real credentials.
 | Tayler Usmar | ST10445063 | Maintenance and daily operations, change history and reasons, stale reports, purchasing actions, accessibility |
 | Joe Leo Van Niekerk | ST10445055 | Stock and reference data, row-level security, deployment |
 | Tshepo Kau | ST10454055 | Downtime and workforce, sign-in sessions, test coverage, reorder requests |
-| Tlamelo Mothupi | **TODO** | Administration and purchasing, DevOps, user guide |
+| Tlamelo Mothupi | ST10460421 | Administration and purchasing, DevOps, user guide |
 
 ---
 
