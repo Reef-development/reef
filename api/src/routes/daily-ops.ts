@@ -92,7 +92,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       list: "Lists repairs, newest first by default, with labour, parts and total cost.",
       get: "Returns one repair.",
       create:
-        "Logs a repair and the parts it used in one step: either all of it is saved or none. Stock comes off, a reorder is drafted if an item runs low, and the caller is recorded as the person who logged it.",
+        "Logs a repair and the parts it used in one step: either all of it is saved or none. Stock comes off, a reorder request is raised if an item runs low, and the caller is recorded as the person who logged it.",
       update:
         "Corrects a repair's details. Parts change through their own endpoints. Managers and owners only.",
       remove: "Deletes a repair logged in error. Managers and owners only.",
@@ -165,7 +165,7 @@ export function dailyOpsRoutes(app: Hono<AppEnv>, registry: Registry) {
       path: "/api/v1/stock-usage",
       access: "stock:use",
       summary:
-        "Records stock used on the plant. The quantity comes off in one database step, so two people recording at once both count, and a reorder is drafted if the item falls to its reorder point.",
+        "Records stock booked out on the plant. The quantity comes off in one database step, the booking records who took it, what they took, how many and when, and a reorder request is raised if the item falls to its reorder point. Booking stock out never creates a purchase order.",
       refuses: "A zero or negative quantity, or a stock item that does not exist.",
     },
     async (c) => {

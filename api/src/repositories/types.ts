@@ -65,10 +65,16 @@ export interface MaintenancePartsRepository {
 }
 
 export interface StockUsageRepository {
-  /** Takes stock off in one database step and drafts a reorder if needed. Returns the item. */
+  /** Takes stock off in one database step and raises a reorder request if needed. Returns the item. */
   recordUsage(stockItemId: string, qty: number): Promise<Row>;
 }
+export interface ReorderRequestRepository {
+  /** Lists open reorder requests visible to the caller's plant scope. */
+  listOpen(): Promise<Row[]>;
 
+  /** Converts one open reorder request into a draft purchase order. */
+  convert(id: string): Promise<Row>;
+}
 export interface PhotoStore {
   /** A one-time link the browser uploads the file to directly. */
   uploadUrl(path: string): Promise<{ signedUrl: string; token: string }>;

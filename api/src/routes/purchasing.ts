@@ -46,6 +46,39 @@ const STEPS: { verb: string; to: PurchaseOrderStatus; summary: string; refuses: 
  * PATCH and for the prototype; these routes give each step its own address and a plain refusal.
  */
 export function purchasingRoutes(app: Hono<AppEnv>, registry: Registry) {
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "GET",
+      path: "/api/v1/reorder-requests",
+      access: "po:read",
+      summary:
+        "Lists open reorder requests for the caller's plant. A request means stock needs replenishment; it is not yet a purchase order.",
+      refuses: "Workers, and requests from another plant.",
+    },
+    async (c) => {
+      return ok(c, await c.var.repos.reorderRequests.listOpen());
+    },
+  );
+
+  defineRoute(
+    app,
+    registry,
+    {
+      method: "POST",
+      path: "/api/v1/reorder-requests/:id/convert",
+      access: "po:write",
+      summary:
+        "Turns one open reorder request into a draft purchase order. This is the step that commits the request to the purchasing workflow.",
+      refuses:
+        "Workers, a request from another plant, a missing request, or one that was already converted.",
+    },
+    async (c) => {
+      const id = parseWith(Id, c.req.param("id"));
+      return ok(c, await c.var.repos.reorderRequests.convert(id), 201);
+    },
+  );
   const base = "/api/v1/purchase-orders/:id";
 
   defineRoute(
