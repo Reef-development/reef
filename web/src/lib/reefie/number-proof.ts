@@ -1,16 +1,11 @@
 /**
  * T9: proves the numbers in a drafted answer before it reaches the user.
  *
- * The rule: every number in the draft must trace back to a figure the tools actually
- * returned this turn. If it doesn't, the draft is thrown away and the fallback is shown.
- *
- * Two cases are deliberately skipped at extraction time, so nothing downstream has to
- * reason about them:
- *
- *   - Years (1900-2100). "As of 2026, production is steady" is a date, not a claim.
- *   - Tiny integers (0-4). "3 of them are low" is a count, but it's usually incidental.
- *     This one is left in place and filtered by the comparison, because sometimes it is
- *     a real claim.
+ * Skipped at extraction time:
+ *   - Years (1900-2100), unless followed by a magnitude suffix or %.
+ *   - Tiny integers (0-4), unless followed by a magnitude suffix or %.
+ *   - Keys named "id", "*_id", or "*_uuid" — UUID digit runs would otherwise leak
+ *     into the known set and let any coincidental number pass.
  */
 
 export type BadNumber = { value: number; raw: string };
@@ -19,57 +14,136 @@ export type CheckResult =
   | { ok: true }
   | { ok: false; badNumbers: BadNumber[] };
 
-type FoundNumber = { value: number; start: number; end: number; raw: string };
+export type FoundNumber = {
+  value: number;
+  start: number;
+  end: number;
+  raw: string;
+  scaled: boolean;
+  percent: boolean;
+};
 
-/**
- * Matches a standalone number and returns it with its offsets. Years in 1900-2100 are
- * dropped: they're dates, not figures, and no tool returns a year as a value to be
- * verified.
- */
-function extractNumbersFromText(text: string): FoundNumber[] {
+export type KnownOptions = { scaled?: boolean; percent?: boolean };
+
+const NBSP = "\u00A0";
+const NNBSP = "\u202F";
+
+const NUMBER_RE = new RegExp(
+  `(?<![\\w])` +
+    `(R\\s*)?` +
+    `(` +
+      `\\d{1,3}(?:[ ${NBSP}${NNBSP},.']\\d{3})*(?:[.,]\\d+)?` +
+      `|` +
+      `\\d+(?:[.,]\\d+)?` +
+    `)` +
+    `(\\s*(?:[Bb]illion|[Mm]illion|[Tt]housand)|bn|mn|[MmKk])?` +
+    `(?![\\w])`,
+  "g",
+);
+
+const SUFFIX_MULTIPLIER: Record<string, number> = {
+  billion: 1e9,
+  bn: 1e9,
+  million: 1e6,
+  mn: 1e6,
+  m: 1e6,
+  thousand: 1e3,
+  k: 1e3,
+};
+
+function suffixMultiplier(suffix: string | undefined): number | null {
+  if (!suffix) return null;
+  return SUFFIX_MULTIPLIER[suffix.trim().toLowerCase()] ?? null;
+}
+
+export function parseFormatted(raw: string): number | null {
+  if (!raw) return null;
+
+  let s = raw.replace(new RegExp(`[${NBSP}${NNBSP}\u2019']`, "g"), " ").trim();
+  if (!s) return null;
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  const hasSpace = /\s/.test(s);
+
+  if (hasComma && hasDot) {
+    if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+      s = s.replace(/\./g, "").replace(/,/g, ".");
+    } else {
+      s = s.replace(/,/g, "");
+    }
+    s = s.replace(/\s/g, "");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  if (hasSpace) {
+    const n = Number(s.replace(/\s/g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  if (hasComma) {
+    const parts = s.split(",");
+    const grouped = parts.length >= 2 && parts.slice(1).every((p) => /^\d{3}$/.test(p));
+    if (grouped) {
+      const n = Number(parts.join(""));
+      return Number.isFinite(n) ? n : null;
+    }
+    const n = Number(parts.join("."));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+export function extractNumbers(text: string): FoundNumber[] {
   const out: FoundNumber[] = [];
   if (!text) return out;
 
-  // Matches: an optional R prefix, then a number that is either grouped (1 234 567.89)
-  // or plain (42). Word boundaries on both sides keep it from matching inside identifiers
-  // like "rig07".
-  const re = /(?<![\w])(?:R\s*)?(\d{1,3}(?:[ ,]\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?![\w])/g;
-
+  NUMBER_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const raw = m[1];
-    const value = Number(raw.replace(/[ ,]/g, ""));
-    if (!Number.isFinite(value)) continue;
+  while ((m = NUMBER_RE.exec(text)) !== null) {
+    const numberPart = m[2];
+    const suffix = m[3];
 
-    // Drop years. A four-digit number in the 1900-2100 range is almost always a date,
-    // not a claim about data, and no tool returns a year as a value.
-    if (Number.isInteger(value) && value >= 1900 && value <= 2100) continue;
+    let value = parseFormatted(numberPart);
+    if (value === null || !Number.isFinite(value)) continue;
 
-    out.push({ value, start: m.index, end: m.index + m[0].length, raw });
+    const mult = suffixMultiplier(suffix);
+    const scaled = mult !== null;
+    if (scaled) value *= mult;
+
+    const end = m.index + m[0].length;
+    const percent = /^\s?(%|percent\b)/i.test(text.slice(end));
+
+    if (!scaled) {
+      if (Number.isInteger(value) && value >= 1900 && value <= 2100 && !percent) continue;
+      if (Number.isInteger(value) && Math.abs(value) <= 4 && !percent) continue;
+    }
+
+    out.push({
+      value,
+      start: m.index,
+      end,
+      raw: numberPart + (suffix ?? ""),
+      scaled,
+      percent,
+    });
   }
   return out;
 }
 
-/**
- * Reads the numbers out of a piece of text. Exposed for the tests.
- */
-export function extractNumbers(text: string): FoundNumber[] {
-  return extractNumbersFromText(text);
+function isIdentifierKey(key: string): boolean {
+  const k = key.toLowerCase();
+  return k === "id" || k.endsWith("_id") || k.endsWith("_uuid") || k === "uuid";
 }
 
-/**
- * Walks the tool output and collects every number it can find. Numbers appear as number
- * values, as numeric strings, as array lengths, and as digits embedded in strings.
- */
 export function collectKnownNumbers(node: unknown, out: Set<number> = new Set()): Set<number> {
   if (node === null || node === undefined) return out;
 
   if (typeof node === "number") {
-    if (Number.isFinite(node)) {
-      out.add(node);
-      out.add(node * 100);
-      out.add(node / 100);
-    }
+    if (Number.isFinite(node)) out.add(node);
     return out;
   }
 
@@ -82,21 +156,16 @@ export function collectKnownNumbers(node: unknown, out: Set<number> = new Set())
   }
 
   if (typeof node === "string") {
-    for (const { value } of extractNumbersFromText(node)) {
-      out.add(value);
-      out.add(value * 100);
-      out.add(value / 100);
+    // Skip UUID-shaped strings entirely.
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(node)) {
+      return out;
     }
-    // Also collect raw digit-runs so identifiers like "Drill rig 07" register the 7.
+    for (const { value } of extractNumbers(node)) out.add(value);
     const loose = node.match(/\d+(?:[.,]\d+)?/g);
     if (loose) {
       for (const raw of loose) {
         const v = Number(raw.replace(",", "."));
-        if (Number.isFinite(v)) {
-          out.add(v);
-          out.add(v * 100);
-          out.add(v / 100);
-        }
+        if (Number.isFinite(v)) out.add(v);
       }
     }
     return out;
@@ -109,8 +178,9 @@ export function collectKnownNumbers(node: unknown, out: Set<number> = new Set())
   }
 
   if (typeof node === "object") {
-    for (const value of Object.values(node as Record<string, unknown>)) {
-      collectKnownNumbers(value, out);
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      if (isIdentifierKey(k)) continue;
+      collectKnownNumbers(v, out);
     }
     return out;
   }
@@ -118,22 +188,25 @@ export function collectKnownNumbers(node: unknown, out: Set<number> = new Set())
   return out;
 }
 
-function isKnown(value: number, known: Set<number>): boolean {
+export function isKnown(value: number, known: Set<number>, opts: KnownOptions = {}): boolean {
   if (!Number.isFinite(value)) return true;
   const v = Math.abs(value);
 
-  // Tiny integers (0-4) are almost always incidental.
-  if (Number.isInteger(value) && v <= 4) return true;
+  if (!opts.scaled && !opts.percent && Number.isInteger(value) && v <= 4) return true;
+
+  const rel = opts.scaled ? 0.01 : 0.005;
+  const floor = opts.percent ? 0.5 : 0.01;
 
   for (const k of known) {
     const kk = Math.abs(k);
+
     if (v === kk) return true;
-    const scale = Math.max(1, kk);
-    if (Math.abs(kk - v) <= 0.01 * scale) return true;
-    if (Math.round(kk) === Math.round(v)) return true;
-    if (Math.abs(kk * 100 - v) <= 0.5) return true;
-    if (Math.abs(kk / 100 - v) <= 0.5) return true;
+
+    if (Math.abs(kk - v) <= Math.max(floor, kk * rel)) return true;
+
+    if (opts.percent && Math.abs(kk * 100 - v) <= 0.5) return true;
   }
+
   return false;
 }
 
@@ -141,10 +214,10 @@ export function verifyAnswer(answerText: string, toolOutputs: unknown[]): CheckR
   const known = new Set<number>();
   for (const output of toolOutputs) collectKnownNumbers(output, known);
 
-  const numbers = extractNumbersFromText(answerText);
+  const numbers = extractNumbers(answerText);
   const bad: BadNumber[] = [];
-  for (const { value, raw } of numbers) {
-    if (!isKnown(value, known)) bad.push({ value, raw });
+  for (const { value, raw, scaled, percent } of numbers) {
+    if (!isKnown(value, known, { scaled, percent })) bad.push({ value, raw });
   }
 
   return bad.length === 0 ? { ok: true } : { ok: false, badNumbers: bad };
