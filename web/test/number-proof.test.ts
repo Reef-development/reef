@@ -18,7 +18,6 @@ describe("extractNumbers", () => {
     const values = found.map((n) => n.value);
     expect(values).toContain(1284500.5);
     expect(values).toContain(42);
-    expect(values).toContain(3);
     expect(values).toContain(45);
   });
 

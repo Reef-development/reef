@@ -32,7 +32,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-import reefLogo from "@/assets/reef-logo.png.asset.json";
 
 const items = [
   {
@@ -142,7 +141,7 @@ export function AppSidebar() {
         ) : (
           <div className="px-2 py-3 animate-fade-in-soft">
             <img
-              src={reefLogo.url}
+            src="/reef-logo.png"
               alt="R.E.E.F"
               className="h-10 w-auto transition-transform hover:scale-[1.02]"
             />

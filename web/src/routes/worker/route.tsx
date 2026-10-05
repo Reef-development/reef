@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { LogOut, ArrowLeft } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import reefLogo from "@/assets/reef-logo.png.asset.json";
+
 
 export const Route = createFileRoute("/worker")({
   ssr: false,
@@ -32,7 +32,7 @@ function WorkerLayout() {
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1 flex justify-center">
-          <img src={reefLogo.url} alt="R.E.E.F" className="h-9 w-auto" />
+         <img src="/reef-logo.png" alt="R.E.E.F" className="h-9 w-auto" />
         </div>
         <Button variant="ghost" size="sm" onClick={signOut} className="text-white hover:bg-white/10 hover:text-white">
           <LogOut className="w-4 h-4" />
