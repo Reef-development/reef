@@ -12,7 +12,7 @@ export const PHOTO_FOLDERS = ["repairs", "fuel", "downtime", "receipts"] as cons
 export const PhotoPath = z
   .string()
   .regex(
-    /^(repairs|fuel|downtime)\/[0-9a-f-]{36}\/[\w.-]{1,80}$/,
+    /^(repairs|fuel|downtime|receipts)\/[0-9a-f-]{36}\/[\w.-]{1,80}$/,
     "Not a photo this system stored",
   );
 const photos = z.array(PhotoPath).max(10, "At most 10 photos").optional();
