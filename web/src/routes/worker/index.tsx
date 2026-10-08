@@ -42,27 +42,36 @@ const tiles = [
     icon: Receipt,
     color: "bg-secondary text-secondary-foreground border",
   },
-  {
-    to: "/worker/sessions",
-    label: "Active Sign-ins",
-    icon: MonitorSmartphone,
-    color: "bg-secondary text-secondary-foreground border",
-  },
 ] as const;
 
 function WorkerHome() {
   return (
     <div className="space-y-4 animate-fade-in-soft">
       <div className="py-4 animate-fade-up">
-        <div className="text-[10px] tracking-[0.28em] uppercase text-muted-foreground mb-1">
-          On-site · Live sync
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-muted-foreground mb-1">
+              On-site · Live sync
+            </div>
+
+            <h1 className="text-display text-2xl sm:text-3xl font-normal">
+              Log your shift.
+            </h1>
+
+            <p className="text-sm text-muted-foreground mt-1">
+              One tap. Data hits the office instantly.
+            </p>
+          </div>
+
+          <Link
+            to="/worker/sessions"
+            className="shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-md border bg-background text-xs uppercase tracking-wider font-medium hover:bg-secondary transition-colors"
+            aria-label="Active sign-ins"
+          >
+            <MonitorSmartphone className="w-3.5 h-3.5" />
+            Sign-ins
+          </Link>
         </div>
-
-        <h1 className="text-display text-2xl sm:text-3xl font-normal">Log your shift.</h1>
-
-        <p className="text-sm text-muted-foreground mt-1">
-          One tap. Data hits the office instantly.
-        </p>
 
         <div className="mining-rule mt-3 opacity-60" />
       </div>
