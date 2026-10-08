@@ -80,21 +80,6 @@ export function AuthPage() {
     toast.success("Account created — check your email if confirmation is required.");
   };
 
-  const quickLogin = async (testEmail: string) => {
-    setLoading(true);
-    // Demo login against the dev seed. The password is public by design — every
-    // seeded user in scripts/seed-dev.mjs has it, and the accounts only exist in
-    // the dev database. Not a real credential.
-    const { error } = await supabase.auth.signInWithPassword({
-      email: testEmail,
-      password: "Reef2026!", // secrets-check: allow
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success(`Signed in as ${testEmail}`);
-    navigate({ to: "/" });
-  };
-
   return (
     <div
       className="min-h-screen grid lg:grid-cols-[1.1fr_1fr] relative overflow-hidden"
@@ -389,43 +374,6 @@ export function AuthPage() {
                 </form>
               </TabsContent>
             </Tabs>
-
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-primary/15" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-card px-3 text-[10px] tracking-[0.3em] uppercase text-muted-foreground">
-                  or
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-6 border border-dashed border-accent/40 p-4 space-y-3">
-              <div className="text-[10px] tracking-[0.25em] uppercase text-muted-foreground text-center">
-                Demo access
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={loading}
-                  className="h-10 rounded-none tracking-[0.15em] uppercase text-[10px]"
-                  onClick={() => quickLogin("owner@reef.co.za")}
-                >
-                  Owner demo
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={loading}
-                  className="h-10 rounded-none tracking-[0.15em] uppercase text-[10px]"
-                  onClick={() => quickLogin("worker1@reef.co.za")}
-                >
-                  Worker demo
-                </Button>
-              </div>
-            </div>
 
             {/* mobile stat strip */}
             <div className="lg:hidden mt-6 grid grid-cols-4 border-t border-l border-primary/15">
