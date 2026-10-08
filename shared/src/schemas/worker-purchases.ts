@@ -12,7 +12,7 @@ import { z } from "zod";
  */
 
 export const WorkerPurchaseInput = z.object({
-  worker_id: z.string().uuid(),
+worker_id: z.string().uuid().optional().nullable(),
   mine_id: z.string().uuid().optional().nullable(),
   stock_item_id: z.string().uuid().optional().nullable(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
