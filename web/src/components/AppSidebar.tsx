@@ -17,6 +17,7 @@ import {
   Fuel,
   History,
   MonitorSmartphone,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -43,6 +44,11 @@ const items = [
     title: "Cost Analytics",
     url: "/analytics",
     icon: LineChart,
+  },
+  {
+    title: "Reimbursements",
+    url: "/reimbursements",
+    icon: Banknote,
   },
   {
     title: "Reefie",

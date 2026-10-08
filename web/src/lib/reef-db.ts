@@ -8,7 +8,8 @@ export type TableName =
   | "stock_items" | "purchase_orders" | "po_lines"
   | "maintenance_logs" | "maintenance_parts"
   | "production_logs" | "static_costs" | "downtime_events"
-  | "employees" | "attendance" | "employee_transfers" | "fuel_slips";
+  | "employees" | "attendance" | "employee_transfers" | "fuel_slips"
+  | "worker_purchases";
 
 /**
  * Tables already served by the REEF API. Screens for these go through the API; the rest still
