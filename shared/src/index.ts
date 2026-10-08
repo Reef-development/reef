@@ -13,3 +13,4 @@ export * from "./schemas/retention.js";
 export * from "./schemas/notifications.js";
 export * from "./rules/capture-age.js";
 export * from "./rules/cost.js";
+export * from "./schemas/worker-purchases.js";

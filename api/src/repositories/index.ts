@@ -36,6 +36,7 @@ import type {
   SessionRepository,
   StockUsageRepository,
   UserRepository,
+  WorkerPurchasesRepository,
 } from "./types.js";
 import type { PurchaseActionsRepository } from "./purchase-actions.js";
 
@@ -63,4 +64,5 @@ export type Repositories = {
   jobs: JobRepository;
   purchaseActions: PurchaseActionsRepository;
   settings: SettingsRepository;
+  workerPurchases: WorkerPurchasesRepository;
 };

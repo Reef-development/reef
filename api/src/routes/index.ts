@@ -30,6 +30,7 @@ import { defineRoute } from "./define.js";
 import { notificationRoutes } from "./notifications.js";
 import { resourceRoutes, scopedResourceRoutes } from "./resource.js";
 import { settingsRoutes } from "./settings.js";
+import { workerPurchasesRoutes } from "./worker-purchases.js";
 
 const UserId = z.string().uuid();
 const SessionId = z.string().uuid();
@@ -80,7 +81,6 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     async (c) => {
       const sessions = await c.var.repos.sessions.forUser(c.var.user.id);
-
       return ok(
         c,
         sessions.filter((session) => session.revoked_at === null),
@@ -101,9 +101,7 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     async (c) => {
       const userId = parseWith(UserId, c.req.param("userId"));
-
       const sessions = await c.var.repos.sessions.forUser(userId);
-
       return ok(
         c,
         sessions.filter((session) => session.revoked_at === null),
@@ -124,17 +122,11 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     async (c) => {
       const sessionId = parseWith(SessionId, c.req.param("sessionId"));
-
       const revoked = await c.var.repos.sessions.revoke(sessionId);
-
       if (!revoked) {
         throw new ApiError("NOT_FOUND", "That sign-in does not exist or has already been revoked");
       }
-
-      return ok(c, {
-        sessionId,
-        revoked: true,
-      });
+      return ok(c, { sessionId, revoked: true });
     },
   );
 
@@ -150,13 +142,8 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
     },
     async (c) => {
       const userId = parseWith(UserId, c.req.param("userId"));
-
       const revokedCount = await c.var.repos.sessions.revokeAll(userId);
-
-      return ok(c, {
-        userId,
-        revokedCount,
-      });
+      return ok(c, { userId, revokedCount });
     },
   );
 
@@ -304,4 +291,5 @@ export function registerRoutes(app: Hono<AppEnv>, registry: Registry) {
   adminRoutes(app, registry);
   notificationRoutes(app, registry);
   settingsRoutes(app, registry);
+  workerPurchasesRoutes(app, registry);
 }
