@@ -61,8 +61,33 @@ export function supabaseWorkerPurchases(db: SupabaseClient): WorkerPurchasesRepo
       };
     },
 
-    async create(input: unknown, loggedBy: string): Promise<Row> {
-      const body = { ...(input as Record<string, unknown>), logged_by: loggedBy };
+       async create(input: unknown, loggedBy: string): Promise<Row> {
+      const raw = input as Record<string, unknown>;
+
+      // If the caller didn't say who bought it, it's their own claim. worker_id
+      // comes from profiles.employee_id — the link added in migration
+      // 20261008120100. The worker capture form doesn't send it because the
+      // whole point is that a worker submits for themselves.
+      let workerId = raw.worker_id as string | undefined;
+
+      if (!workerId) {
+        const { data: profile, error: profileError } = await db
+          .from("profiles")
+          .select("employee_id")
+          .eq("id", loggedBy)
+          .maybeSingle();
+        if (profileError) throw profileError;
+        workerId =
+          (profile as { employee_id: string | null } | null)?.employee_id ?? undefined;
+      }
+
+      if (!workerId) {
+        throw new Error(
+          "This account is not linked to an employee, so a purchase cannot be recorded against it",
+        );
+      }
+
+      const body = { ...raw, worker_id: workerId, logged_by: loggedBy };
       const { data, error } = await db.from(table).insert(body).select().single();
       if (error) throw error;
       return data as Row;
