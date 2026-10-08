@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { useList, ZAR, NUM } from "@/lib/reef-db";
+import { useList, ZAR } from "@/lib/reef-db";
+import { signedPhotoUrl } from "@/lib/photo-upload";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -77,6 +78,14 @@ function Page() {
     return [...map.entries()].sort((a, b) => b[1] - a[1]);
   }, [selectedRows, employeeById]);
 
+  // The first receipt on the open claim, resolved to a one-hour signed URL.
+  const firstReceiptPath = viewPurchase?.receipt_urls?.[0] ?? null;
+  const receiptUrl = useQuery({
+    queryKey: ["receipt", firstReceiptPath],
+    enabled: !!firstReceiptPath,
+    queryFn: () => signedPhotoUrl(firstReceiptPath!),
+  });
+
   const toggle = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -103,7 +112,9 @@ function Page() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["worker_purchases"] });
-      toast.success(`${selectedRows.length} claim${selectedRows.length === 1 ? "" : "s"} marked paid`);
+      toast.success(
+        `${selectedRows.length} claim${selectedRows.length === 1 ? "" : "s"} marked paid`,
+      );
       setSelected(new Set());
       setConfirmOpen(false);
     },
@@ -175,9 +186,7 @@ function Page() {
         <div className="ml-auto flex items-center gap-3">
           {pendingRows.length > 0 && (
             <span className="text-sm text-muted-foreground">
-              <span className="num-mono text-foreground font-medium">
-                {ZAR(pendingTotal)}
-              </span>{" "}
+              <span className="num-mono text-foreground font-medium">{ZAR(pendingTotal)}</span>{" "}
               outstanding across {pendingRows.length}{" "}
               {pendingRows.length === 1 ? "claim" : "claims"}
             </span>
@@ -384,21 +393,26 @@ function Page() {
                   <div className="text-xs text-muted-foreground mb-2">
                     Receipt{viewPurchase.receipt_urls.length === 1 ? "" : "s"}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {viewPurchase.receipt_urls.map((path) => (
-                      <a
-                        key={path}
-                        href={`#receipt-${path}`}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          toast.info("Receipt photos open in the next release");
-                        }}
-                        className="text-xs underline text-muted-foreground"
-                      >
-                        {path.split("/").pop()}
-                      </a>
-                    ))}
-                  </div>
+                  {receiptUrl.isLoading && (
+                    <div className="text-xs text-muted-foreground">Loading receipt…</div>
+                  )}
+                  {receiptUrl.data && (
+                    <a href={receiptUrl.data} target="_blank" rel="noreferrer">
+                      <img
+                        src={receiptUrl.data}
+                        alt="Receipt"
+                        className="max-h-64 rounded-md border hover:opacity-90 transition-opacity cursor-zoom-in"
+                      />
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Click to open full size
+                      </div>
+                    </a>
+                  )}
+                  {!receiptUrl.isLoading && !receiptUrl.data && (
+                    <div className="text-xs text-muted-foreground">
+                      Could not load the receipt photo.
+                    </div>
+                  )}
                 </div>
               )}
 
