@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Boxes, Wrench, AlertOctagon, Fuel, Droplets, MonitorSmartphone } from "lucide-react";
+import { Boxes, Wrench, AlertOctagon, Fuel, Droplets, Receipt, MonitorSmartphone } from "lucide-react";
 
 export const Route = createFileRoute("/worker/")({
   component: WorkerHome,
@@ -34,6 +34,12 @@ const tiles = [
     to: "/worker/log-fuel",
     label: "Log Fuel",
     icon: Droplets,
+    color: "bg-secondary text-secondary-foreground border",
+  },
+  {
+    to: "/worker/log-purchase",
+    label: "Money I Spent",
+    icon: Receipt,
     color: "bg-secondary text-secondary-foreground border",
   },
   {
