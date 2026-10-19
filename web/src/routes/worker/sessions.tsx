@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
+import { deviceLabel } from "@/lib/device-label";
 
 type UserSession = {
   id: string;
@@ -48,7 +49,7 @@ function WorkerSessionsPage() {
         {sessions.data?.map((session) => (
           <div key={session.id} className="rounded-lg border p-4 space-y-3">
             <div className="space-y-1">
-              <p className="font-medium">{session.device ?? "Unknown device"}</p>
+              <p className="font-medium">{deviceLabel(session.device)}</p>
 
               <p className="text-sm text-muted-foreground">
                 Address: {session.address ?? "Unknown"}

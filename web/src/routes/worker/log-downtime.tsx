@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
-import { Camera } from "lucide-react";
+import { PhotoPicker } from "@/components/PhotoPicker";
 
 export const Route = createFileRoute("/worker/log-downtime")({ component: Page });
 
@@ -32,7 +32,7 @@ function Page() {
   const [reason, setReason] = useState("breakdown");
   const [hours, setHours] = useState<number>(1);
   const [notes, setNotes] = useState("");
-  const [photos, setPhotos] = useState<FileList | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -41,7 +41,7 @@ function Page() {
     mutationFn: async () => {
       if (!mineId) throw new Error("Select mine");
       const { data: userRes } = await supabase.auth.getUser();
-      const photo_urls = photos ? await uploadPhotos(photos, "downtime") : [];
+      const photo_urls = photos.length ? await uploadPhotos(photos, "downtime") : [];
       const { error } = await supabase.from("downtime_events").insert({
         mine_id: mineId,
         equipment_id: equipId || null,
@@ -93,11 +93,7 @@ function Page() {
         <Label htmlFor="log-downtime-notes-optional">Notes (optional)</Label>
         <Textarea id="log-downtime-notes-optional" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="log-downtime-photos-optional" className="flex items-center gap-2"><Camera className="w-4 h-4" />Photos (optional)</Label>
-        <Input id="log-downtime-photos-optional" type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
-        {photos && <p className="text-xs text-muted-foreground">{photos.length} photo(s) selected</p>}
-      </div>
+      <PhotoPicker id="log-downtime-photos-optional" label="Photos (optional)" files={photos} onChange={setPhotos} />
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save Downtime"}
       </Button>

@@ -11,7 +11,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
-import { Camera } from "lucide-react";
+import { PhotoPicker } from "@/components/PhotoPicker";
 
 export const Route = createFileRoute("/worker/log-fuel")({ component: Page });
 
@@ -24,7 +24,7 @@ function Page() {
   const [litres, setLitres] = useState<number>(0);
   const [cpl, setCpl] = useState<number>(0);
   const [odo, setOdo] = useState<string>("");
-  const [photos, setPhotos] = useState<FileList | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -33,7 +33,7 @@ function Page() {
     mutationFn: async () => {
       if (!equipId && !label.trim()) throw new Error("Pick a vehicle or type a label");
       if (litres <= 0) throw new Error("Enter litres pumped");
-      const photo_urls = photos ? await uploadPhotos(photos, "fuel") : [];
+      const photo_urls = photos.length ? await uploadPhotos(photos, "fuel") : [];
       // The total and who logged it are worked out on the server, so neither is sent.
       await api("/api/v1/fuel-slips", { method: "POST", body: JSON.stringify({
         equipment_id: equipId || null,
@@ -90,10 +90,7 @@ function Page() {
         <Label htmlFor="log-fuel-odometer-hour-reading">Odometer / hour reading</Label>
         <Input id="log-fuel-odometer-hour-reading" type="number" inputMode="decimal" step="0.1" className="h-12 text-lg" value={odo} onChange={(e) => setOdo(e.target.value)} />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="log-fuel-slip-photo" className="flex items-center gap-2"><Camera className="w-4 h-4" />Slip photo</Label>
-        <Input id="log-fuel-slip-photo" type="file" accept="image/*" capture="environment" multiple className="h-12" onChange={(e) => setPhotos(e.target.files)} />
-      </div>
+      <PhotoPicker id="log-fuel-slip-photo" label="Slip photo" files={photos} onChange={setPhotos} />
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save"}
       </Button>
