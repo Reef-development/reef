@@ -87,7 +87,9 @@ export function DataTable<T extends { id: string }>({
         />
       )}
       <div className="border rounded-md bg-card overflow-x-auto">
-        <Table>
+        {/* On a phone the table keeps a readable width and scrolls sideways, rather than
+            squeezing every column until dates and buttons wrap or are cut off. */}
+        <Table style={{ minWidth: `${(columns.length + 1) * 7}rem` }}>
           <TableHeader>
             <TableRow>
               {columns.map((c) => {
