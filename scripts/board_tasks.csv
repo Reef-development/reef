@@ -1,0 +1,58 @@
+id|title|owner|checker|days|day|after|stage
+
+T0|Bring the server tier and the front end into the repository|Tayler|Leo|1|Day 1|T1|repository
+
+T1|Set up the repository Leo made so five people can work in it|Bradley|Leo|0.5|Day 1|nothing|repository
+
+T2|Turn on the repository safety rules|Tlamelo|Bradley|0.5|Day 1|T1|repository
+
+T3|Get the six automatic checks passing|Tlamelo|Leo|1|Day 1 to 2|T0|repository
+
+T4|Add the secret settings the system needs|Leo|Tlamelo|0.5|Day 1|nothing|repository
+
+T5|Put every task on a board|Bradley|Tshepo|0.5|Day 1|nothing|repository
+
+T6|Record why somebody changed a record, in the database and the API|Leo|Tayler|1|Day 3|T3|gaps
+
+T7|Ask for the reason on the screens, and show it in the history|Tayler|Tlamelo|1|Day 4|T6|gaps
+
+T8|Stop two people overwriting each other without knowing|Tayler|Tshepo|2|Day 2 to 3|T0|gaps
+
+T9|Make the assistant prove its numbers|Bradley|Leo|2|Day 3 to 4|T3|gaps
+
+T10|Refuse very old entries, and mark reports they would have changed|Tayler|Tshepo|1.5|Day 5 to 6|T3|gaps
+
+T11|Call a personal information lookup what it is, and record refused attempts|Tshepo|Leo|1|Day 1|nothing|gaps
+
+T12|Show people where they are signed in, and let the owner cut a device off|Tshepo|Tayler|1.5|Day 3 to 4|T3|gaps
+
+T13|Write the lost device procedure|Tlamelo|Bradley|1|Day 3|nothing|gaps
+
+T14|Add a store location to the parts list|Leo|Tshepo|1|Day 4|T3|gaps
+
+T15|Write down the three decisions taken on REEF's behalf|Bradley|Tlamelo|0.5|Day 2|nothing|gaps
+
+T16|Add tests for the parts nobody tested|Tshepo|Tayler|2.5|Day 5 to 7|T3|tests
+
+T17|Test the email sending without sending any email|Tshepo|Bradley|1.5|Day 8 to 9|T16|tests
+
+T18|Add tests for the capture and analytics screens|Tayler|Tlamelo|1.5|Day 8 to 9|T3|tests
+
+T19|Add tests for the register and admin screens|Leo|Tayler|1.5|Day 5 to 6|T3|tests
+
+T20|Check the screens work for people using a keyboard or a screen reader|Tlamelo|Tshepo|1.5|Day 4 to 5|T3|tests
+
+T21|Check the reports are still fast with three years of data|Leo|Bradley|1.5|Day 9 to 10|T3|tests
+
+T22|Describe your own part of the API|all five|Bradley|0.5|Day 2 to 9|T3|documents
+
+T23|Write the user guide and a card for the plant wall|Tlamelo|Bradley|2|Day 6 to 7|T3|documents
+
+T24|Finish the notifications and the report export|Bradley|Tshepo|1|Day 5|T3|documents
+
+T25|Set up the live environment and deploy|Leo|Tlamelo|2|Day 7 to 8|T3 T4|live
+
+T26|Test the live system as all three kinds of user|Tlamelo|Leo|1|Day 9|T25|live
+
+T27|Sit with REEF, walk through it, and get it signed off|Bradley|All|2|Day 9 to 10|T26 T23|live
+
