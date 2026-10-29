@@ -1,13 +1,17 @@
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
 import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [
     tanstackStart({
-      // This tells TanStack to use our custom web/src/server.ts 
+      // This tells TanStack to use our custom web/src/server.ts
       server: { entry: "server" },
     }),
+    nitro(),
     viteReact(),
+    tailwindcss(),
   ],
 });

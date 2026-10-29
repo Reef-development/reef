@@ -1,6 +1,6 @@
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
+@source "../src";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -314,34 +314,3 @@
   position: absolute;
   top: 0; bottom: 0; left: 0;
   width: 18%;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 22%, transparent), transparent);
-  animation: reef-sweep 7s cubic-bezier(0.45,0,0.15,1) infinite;
-  pointer-events: none;
-}
-
-.reef-grain::before {
-  content: "";
-  position: absolute;
-  inset: -50%;
-  background-image: radial-gradient(rgba(255,255,255,0.35) 0.5px, transparent 0.5px);
-  background-size: 3px 3px;
-  opacity: 0.05;
-  animation: reef-blink 4s steps(3, end) infinite;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reef-video, .reef-sweep::after, .reef-grain::before, .reef-marquee { animation: none !important; }
-}
-
-/* Number inputs: no native spinners (they clip the border on narrow fields),
-   and the focus ring sits above neighbouring fields in tight grids. */
-.num-input::-webkit-outer-spin-button,
-.num-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-.num-input {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
