@@ -3,63 +3,41 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
-  generateText,
-  stepCountIs,
   tool,
   type UIMessage,
 } from "ai";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createGroq } from "@ai-sdk/groq";
-import { verifyAnswer, type CheckResult } from "@/lib/reefie/number-proof";
-import { buildFallbackAnswer } from "@/lib/reefie/fallback-template";
-import { isSiteComparisonRequest, SITE_COMPARISON_REFUSAL } from "@/lib/reefie/site-guard";
+import {
+  hasCompareWords,
+  isSiteComparisonRequest,
+  SITE_COMPARISON_REFUSAL,
+} from "@/lib/reefie/site-guard";
 import { withDerivedCosts } from "@/lib/reefie/derived-costs";
 import { ungroundedTerms } from "@/lib/reefie/scope-guard";
+import { buildSystemPrompt } from "@/lib/reefie/system-prompt";
+import { runReefie, type Captured, type NumberCheck } from "@/lib/reefie/run-reefie";
 
 type ChatBody = { messages?: unknown; threadId?: unknown };
 
-const SYSTEM = `You are Reefie, the operations assistant for R.E.E.F (Resource Energy Engineering Fuels),
-a South African contract mining services company (est. 2014, head office Farm 43 Hekpoort, crews across Mpumalanga mines).
+const MODEL_ID = "openai/gpt-oss-120b";
 
-You help the owner and managers with three things:
-1. Answering questions about their live operational data (stock, maintenance, production, costs, downtime, purchase orders, and staff).
-2. Practical mining operations advice (maintenance planning, wear-and-tear, cost control, magnetite usage, overtime).
-3. Drafting reports and monthly performance summaries.
-
-Rules:
-- When the user asks about data (stock, staff, maintenance, production, costs, downtime, purchase orders), ALWAYS call the matching tool for this turn, even if the same information appeared earlier in the conversation.
-- When quoting figures from a tool result, use only the exact numbers in that result. Do not round, sum, average, or derive new numbers. Do not add a percentage that is not already in the result.
-- When quoting figures from tools, copy them exactly as returned (e.g. "R162,750,000.00", "R247.85", "71.09%"). Never abbreviate with "million" or "thousand"; write the full number.
-- When quoting any total, always state the time window it covers (e.g. "R3 748 677.05 over the last 30 days"). Never present a figure without saying what period it covers.
-- "This month" means months: 1. "Last month" means months: 1. "Last quarter" means months: 3. For change questions, use months: 1 unless the user says otherwise.
-- For per-ton and share-of-cost figures, use the derived fields the tool returns (static_per_ton, static_share_pct, etc.). Do not compute them yourself.
-- Before answering, check the tool's \`_scope\`. If the question asks about something listed under \`_scope.doesNotCover\`, or about an item (equipment, vehicle, site, person) that does not appear in the tool output, reply: "I don't have data on <thing>." Then state what the tool does cover. Never relabel a total as belonging to a subset.
-- When explaining why a figure is what it is, cite only the components and amounts the tool returned. Do not name specific cost items (salaries, depreciation, overtime, materials, plant overhead) unless they appear in the tool output.
-- If the user asks why a figure changed ("why this month") and the tool returns previous_period: use its values to explain the movement. Quote the numbers, not the field names. Never write identifiers like "previous_period.cost_per_ton_change_pct" in the answer — write "3.72%" instead. If previous_period is missing or its change fields are null, say plainly that you can only show the current composition, not the change.
-- For headcount and staff questions, use the headcount tool. Do not guess how many employees REEF has. Quote only the total and the shift breakdown.
-- For "which equipment is closest to end of life" questions, use the equipment_by_life_used array from the maintenance_status tool. Quote the percentages exactly as returned, in the order returned.
-- For downtime questions ("which mine has the most downtime", "downtime hours per mine", "downtime reasons"), use the downtime_by_mine tool. Quote hours and cost exactly as returned, and name the window.
-- If a question cannot be answered from the tools you have, say so plainly and suggest what data would need to be captured. Do not invent an answer.
-- Only attribute a figure to what the tool result calls it. If the tool returns a total across all equipment, do not claim it is specific to one type. If the user asks for a subset the tools cannot isolate, say so and stop. Do not present the total as an answer to a subset question.
-- Currency is South African Rand; format as R1 234.56. Tonnes are metric.
-- Be concise, practical and direct. Use markdown: short headings, bullets, small tables.
-- If data is missing, say so plainly and suggest what to capture.`;
+function env(name: string): string | undefined {
+  return typeof process !== "undefined" ? process.env?.[name] : undefined;
+}
 
 function userClient(token: string) {
-  const url = import.meta.env.VITE_SUPABASE_URL as string;
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
+  const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? env("SUPABASE_URL");
+  const key =
+    (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
+    env("SUPABASE_PUBLISHABLE_KEY");
+  if (!url || !key) throw new Error("Supabase environment variables are missing");
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${token}` } },
   });
 }
-
-type NumberCheck = {
-  passed: boolean;
-  unverifiedNumbers: number[];
-  reason: "ok" | "number_mismatch" | "out_of_scope" | "no_tool_call";
-};
 
 function respondWithFinalText(
   finalText: string,
@@ -108,11 +86,12 @@ function respondWithFinalText(
   return createUIMessageStreamResponse({ stream });
 }
 
-function badValues(check: CheckResult): number[] {
-  return check.ok ? [] : check.badNumbers.map((n) => n.value);
-}
-
-function makeRecorderFor(captured: Array<{ toolName: string; output: unknown }>) {
+/**
+ * Wraps a tool so that (a) its output is captured for number verification, and
+ * (b) a failed lookup returns an explicit error result instead of throwing.
+ * Without (b), a failed query used to look like "0 results" and got quoted as fact.
+ */
+function makeRecorderFor(captured: Captured[]) {
   function recordTool(
     name: string,
     def: {
@@ -128,7 +107,19 @@ function makeRecorderFor(captured: Array<{ toolName: string; output: unknown }>)
       description: def.description,
       inputSchema: def.inputSchema,
       execute: async (input) => {
-        const output = await def.execute(input);
+        let output: unknown;
+        try {
+          output = await def.execute(input);
+        } catch (error) {
+          console.error(`reefie: tool ${name} failed`, error);
+          output = {
+            error: "The data for this question could not be loaded right now.",
+            _scope: {
+              covers: "nothing, because the data lookup failed",
+              doesNotCover: ["all data for this question"],
+            },
+          };
+        }
         captured.push({ toolName: name, output });
         return output;
       },
@@ -136,6 +127,20 @@ function makeRecorderFor(captured: Array<{ toolName: string; output: unknown }>)
   }
   return { recordTool };
 }
+
+/** Throws on a Supabase error so the tool wrapper can report it, instead of treating it as empty. */
+function rows<T>(
+  res: { data: T[] | null; error: { message: string } | null },
+  label: string,
+): T[] {
+  if (res.error) throw new Error(`${label}: ${res.error.message}`);
+  return res.data ?? [];
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+const monthName = (d: Date) =>
+  d.toLocaleString("en-ZA", { month: "long", year: "numeric", timeZone: "UTC" });
 
 /**
  * Calendar-aligned month windows.
@@ -150,6 +155,7 @@ function monthWindow(n: number) {
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   const curFrom = new Date(Date.UTC(y, m - n, 1));
   const curUntil = new Date(Date.UTC(y, m, 1));
+  const lastMonth = new Date(Date.UTC(y, m - 1, 1));
   const prevFrom = new Date(Date.UTC(y, m - 2 * n, 1));
   const prevUntil = curFrom;
   return {
@@ -157,6 +163,7 @@ function monthWindow(n: number) {
     until: iso(curUntil),
     prevSince: iso(prevFrom),
     prevUntil: iso(prevUntil),
+    named: n === 1 ? monthName(curFrom) : `${monthName(curFrom)} to ${monthName(lastMonth)}`,
   };
 }
 
@@ -168,12 +175,24 @@ export const Route = createFileRoute("/api/chat")({
         const token = auth.replace(/^Bearer\s+/i, "");
         if (!token) return new Response("Unauthorized", { status: 401 });
 
-        const supabase = userClient(token);
+        let supabase: SupabaseClient;
+        try {
+          supabase = userClient(token);
+        } catch (error) {
+          console.error("reefie: server misconfigured", error);
+          return new Response("Server is not configured", { status: 500 });
+        }
+
         const { data: userData, error: userErr } = await supabase.auth.getUser(token);
         if (userErr || !userData.user) return new Response("Unauthorized", { status: 401 });
         const userId = userData.user.id;
 
-        const body = (await request.json()) as ChatBody;
+        let body: ChatBody;
+        try {
+          body = (await request.json()) as ChatBody;
+        } catch {
+          return new Response("Invalid JSON body", { status: 400 });
+        }
         const messages = body.messages;
         const threadId = typeof body.threadId === "string" ? body.threadId : null;
         if (!Array.isArray(messages)) return new Response("Messages are required", { status: 400 });
@@ -186,12 +205,10 @@ export const Route = createFileRoute("/api/chat")({
           .maybeSingle();
         if (!thread) return new Response("Thread not found", { status: 404 });
 
-        // Prefer the server-side variable; fall back to the Vite one for local dev.
+        // Prefer the server-side variable; fall back to the Vite one for local dev only.
         // VITE_-prefixed vars are inlined into the browser bundle, so in production
         // only GROQ_API_KEY (server-only) should be set.
-        const key =
-          (typeof process !== "undefined" ? process.env?.GROQ_API_KEY : undefined) ??
-          (import.meta.env.VITE_GROQ_API_KEY as string | undefined);
+        const key = env("GROQ_API_KEY") ?? (import.meta.env.VITE_GROQ_API_KEY as string | undefined);
         if (!key) return new Response("Missing GROQ_API_KEY", { status: 500 });
 
         const uiMessages = messages as UIMessage[];
@@ -218,7 +235,15 @@ export const Route = createFileRoute("/api/chat")({
           }
         }
 
-        if (lastUserText && isSiteComparisonRequest(lastUserText)) {
+        let refuseComparison = lastUserText ? isSiteComparisonRequest(lastUserText) : false;
+        if (!refuseComparison && lastUserText && hasCompareWords(lastUserText)) {
+          // Comparison wording but no obvious multi-site hint: check against the real mine names.
+          const { data: mineRows } = await supabase.from("mines").select("name");
+          const mineNames = (mineRows ?? []).map((m) => String(m.name));
+          refuseComparison = isSiteComparisonRequest(lastUserText, mineNames);
+        }
+
+        if (refuseComparison) {
           return respondWithFinalText(SITE_COMPARISON_REFUSAL, {
             uiMessages,
             supabase,
@@ -230,15 +255,15 @@ export const Route = createFileRoute("/api/chat")({
 
         const num = (v: unknown) => Number(v ?? 0);
 
-        function buildTools(captured: Array<{ toolName: string; output: unknown }>) {
+        function buildTools(captured: Captured[]) {
           const { recordTool } = makeRecorderFor(captured);
           return {
             inventory_status: recordTool("inventory_status", {
               description:
-                "Stock levels, items at or below reorder point, total inventory value, and open purchase orders.",
+                "Stock levels, items at or below reorder point, total inventory value, and the most recent purchase orders (any status). Use for questions about stock, inventory value, low stock, reorder needs, or recent purchase orders.",
               inputSchema: z.object({}),
               execute: async () => {
-                const [{ data: items }, { data: levels }, { data: pos }] = await Promise.all([
+                const [itemsRes, levelsRes, posRes] = await Promise.all([
                   supabase.from("stock_items").select("id, name, sku, unit, unit_cost"),
                   supabase
                     .from("stock_levels")
@@ -249,9 +274,9 @@ export const Route = createFileRoute("/api/chat")({
                     .order("created_at", { ascending: false })
                     .limit(25),
                 ]);
-
-                const catalogue = items ?? [];
-                const stock = levels ?? [];
+                const catalogue = rows(itemsRes, "stock_items");
+                const stock = rows(levelsRes, "stock_levels");
+                const pos = rows(posRes, "purchase_orders");
                 const byId = new Map(catalogue.map((i) => [i.id, i]));
 
                 const totalValue = stock.reduce((s, l) => {
@@ -270,29 +295,37 @@ export const Route = createFileRoute("/api/chat")({
 
                 return {
                   total_items: catalogue.length,
-                  inventory_value: totalValue,
+                  inventory_value: round2(totalValue),
                   low_stock: lowStock,
-                  purchase_orders: (pos ?? []).slice(0, 5).map((p) => ({
+                  purchase_orders: pos.slice(0, 5).map((p) => ({
                     status: p.status,
                     total_cost: p.total_cost,
                   })),
                   _scope: {
                     covers:
-                      "stock catalogue, current stock levels per plant, items at or below reorder point, and recent purchase orders",
+                      "stock catalogue, current stock levels per plant, up to 20 items at or below reorder point, and the 5 most recent purchase orders",
                     doesNotCover: [
                       "forecast stock usage",
                       "individual stock movements or issue history",
-                      "purchase orders older than the most recent 25",
+                      "purchase orders older than the most recent 5",
+                      "low-stock items beyond the first 20",
                     ],
                   },
                 };
               },
             }),
+
             maintenance_status: recordTool("maintenance_status", {
               description:
                 "Recent repairs, maintenance spend, overdue services and equipment wear/life remaining. Use this for questions about which equipment is closest to end of life, or which equipment needs the most attention.",
               inputSchema: z.object({
-                days: z.number().optional().describe("Look-back window in days, default 30"),
+                days: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(365)
+                  .optional()
+                  .describe("Look-back window in days, default 30"),
               }),
               execute: async ({ days }: { days?: number }) => {
                 const windowDays = days ?? 30;
@@ -300,7 +333,7 @@ export const Route = createFileRoute("/api/chat")({
                   .toISOString()
                   .slice(0, 10);
                 const today = new Date().toISOString().slice(0, 10);
-                const [{ data: logs }, { data: equip }, { data: down }] = await Promise.all([
+                const [logsRes, equipRes, downRes] = await Promise.all([
                   supabase
                     .from("maintenance_logs")
                     .select("date, description, total_cost, next_due_date, equipment_id")
@@ -318,12 +351,12 @@ export const Route = createFileRoute("/api/chat")({
                     .order("start_time", { ascending: false })
                     .limit(50),
                 ]);
-                const eq = equip ?? [];
-                const logsArr = logs ?? [];
-                const downArr = down ?? [];
+                const logsArr = rows(logsRes, "maintenance_logs");
+                const eq = rows(equipRes, "equipment");
+                const downArr = rows(downRes, "downtime_events");
                 return {
                   window_days: windowDays,
-                  maintenance_spend: logsArr.reduce((s, l) => s + num(l.total_cost), 0),
+                  maintenance_spend: round2(logsArr.reduce((s, l) => s + num(l.total_cost), 0)),
                   repair_count: logsArr.length,
                   overdue_count: logsArr.filter(
                     (l) => l.next_due_date && l.next_due_date <= today,
@@ -346,8 +379,7 @@ export const Route = createFileRoute("/api/chat")({
                     hours: d.duration_hours,
                   })),
                   _scope: {
-                    covers:
-                      "site-wide maintenance spend across all equipment for the last 30 days, plus a list of the top five machines by life-used percentage and recent downtime events",
+                    covers: `site-wide maintenance spend across all equipment for the last ${windowDays} days, plus a list of the top five machines by life-used percentage and recent downtime events`,
                     doesNotCover: [
                       "per-equipment maintenance costs (only the sum across all equipment)",
                       "per-mine maintenance breakdown",
@@ -358,29 +390,30 @@ export const Route = createFileRoute("/api/chat")({
                 };
               },
             }),
+
             downtime_by_mine: recordTool("downtime_by_mine", {
               description:
                 "Downtime events grouped by mine over a look-back window. Use this for questions about which mine has the most downtime, downtime hours per mine, downtime cost per mine, or the reasons for downtime at each mine.",
               inputSchema: z.object({
-                days: z.number().optional().describe("Look-back window in days, default 30"),
+                days: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(365)
+                  .optional()
+                  .describe("Look-back window in days, default 30"),
                 mine_name: z
                   .string()
                   .optional()
-                  .describe("Optional: restrict to one mine by name"),
+                  .describe("Optional: restrict to one mine by name (case-insensitive)"),
               }),
-              execute: async ({
-                days,
-                mine_name,
-              }: {
-                days?: number;
-                mine_name?: string;
-              }) => {
+              execute: async ({ days, mine_name }: { days?: number; mine_name?: string }) => {
                 const windowDays = days ?? 30;
                 const since = new Date(Date.now() - windowDays * 864e5)
                   .toISOString()
                   .slice(0, 10);
 
-                const [{ data: events }, { data: mines }] = await Promise.all([
+                const [eventsRes, minesRes] = await Promise.all([
                   supabase
                     .from("downtime_events")
                     .select("mine_id, reason, duration_hours, estimated_cost, start_time")
@@ -388,30 +421,25 @@ export const Route = createFileRoute("/api/chat")({
                     .order("start_time", { ascending: false }),
                   supabase.from("mines").select("id, name, location, active"),
                 ]);
-
-                const mineById = new Map((mines ?? []).map((m) => [m.id, m]));
+                const events = rows(eventsRes, "downtime_events");
+                const mines = rows(minesRes, "mines");
+                const mineById = new Map(mines.map((m) => [m.id, m]));
+                const wanted = mine_name?.trim().toLowerCase();
 
                 const byMine: Record<
                   string,
-                  {
-                    hours: number;
-                    cost: number;
-                    events: number;
-                    reasons: Record<string, number>;
-                  }
+                  { hours: number; cost: number; events: number; reasons: Record<string, number> }
                 > = {};
 
-                for (const e of events ?? []) {
+                for (const e of events) {
                   const mine = mineById.get(e.mine_id ?? "");
                   const name = mine?.name ?? "unknown";
-                  if (mine_name && name !== mine_name) continue;
+                  if (wanted && !name.toLowerCase().includes(wanted)) continue;
 
-                  if (!byMine[name]) {
-                    byMine[name] = { hours: 0, cost: 0, events: 0, reasons: {} };
-                  }
-                  const h = Number(e.duration_hours ?? 0);
+                  if (!byMine[name]) byMine[name] = { hours: 0, cost: 0, events: 0, reasons: {} };
+                  const h = num(e.duration_hours);
                   byMine[name].hours += h;
-                  byMine[name].cost += Number(e.estimated_cost ?? 0);
+                  byMine[name].cost += num(e.estimated_cost);
                   byMine[name].events += 1;
                   const reason = e.reason ?? "unknown";
                   byMine[name].reasons[reason] = (byMine[name].reasons[reason] ?? 0) + h;
@@ -420,14 +448,11 @@ export const Route = createFileRoute("/api/chat")({
                 const ranked = Object.entries(byMine)
                   .map(([name, v]) => ({
                     mine: name,
-                    hours: Math.round(v.hours * 100) / 100,
-                    cost: Math.round(v.cost * 100) / 100,
+                    hours: round2(v.hours),
+                    cost: round2(v.cost),
                     events: v.events,
                     reasons: Object.fromEntries(
-                      Object.entries(v.reasons).map(([r, h]) => [
-                        r,
-                        Math.round(h * 100) / 100,
-                      ]),
+                      Object.entries(v.reasons).map(([r, h]) => [r, round2(h)]),
                     ),
                   }))
                   .sort((a, b) => b.hours - a.hours);
@@ -435,8 +460,9 @@ export const Route = createFileRoute("/api/chat")({
                 return {
                   window_days: windowDays,
                   filter: mine_name ?? null,
-                  total_events: (events ?? []).length,
+                  total_events: ranked.reduce((s, m) => s + m.events, 0),
                   by_mine: ranked,
+                  mines_available: mines.map((m) => m.name),
                   _scope: {
                     covers: `downtime_events grouped by mine for the last ${windowDays} days: hours lost, estimated cost in rand, event count, and reason breakdown per mine`,
                     doesNotCover: [
@@ -448,25 +474,32 @@ export const Route = createFileRoute("/api/chat")({
                 };
               },
             }),
+
             production_and_costs: recordTool("production_and_costs", {
               description:
-                "Tonnes produced, variable costs (split into magnetite and overtime), maintenance costs, static costs (grouped by category), and rand-per-ton for the last N completed calendar months. Also returns the previous N months' totals and the change in cost per ton for comparison.",
+                "Tonnes produced, variable costs (split into magnetite and overtime), maintenance costs, static costs (grouped by category), tonnes per mine, and rand-per-ton for the last N completed calendar months. Also returns the previous N months' totals and the change in cost per ton for comparison.",
               inputSchema: z.object({
-                months: z.number().optional().describe("Look-back window in months, default 6"),
+                months: z
+                  .number()
+                  .int()
+                  .min(1)
+                  .max(24)
+                  .optional()
+                  .describe("Look-back window in months, default 6"),
               }),
               execute: async ({ months }: { months?: number }) => {
                 const n = months ?? 6;
                 const win = monthWindow(n);
 
                 const [
-                  { data: prod },
-                  { data: statics },
-                  { data: logs },
-                  { data: mines },
-                  { data: clients },
-                  { data: prevProd },
-                  { data: prevStatics },
-                  { data: prevLogs },
+                  prodRes,
+                  staticsRes,
+                  logsRes,
+                  minesRes,
+                  clientsRes,
+                  prevProdRes,
+                  prevStaticsRes,
+                  prevLogsRes,
                 ] = await Promise.all([
                   supabase
                     .from("production_logs")
@@ -504,19 +537,27 @@ export const Route = createFileRoute("/api/chat")({
                     .lt("date", win.prevUntil),
                 ]);
 
-                const prodArr = prod ?? [];
+                const prodArr = rows(prodRes, "production_logs");
+                const statics = rows(staticsRes, "static_costs");
+                const logs = rows(logsRes, "maintenance_logs");
+                const mines = rows(minesRes, "mines");
+                const clients = rows(clientsRes, "clients");
+                const prevProd = rows(prevProdRes, "production_logs (previous)");
+                const prevStatics = rows(prevStaticsRes, "static_costs (previous)");
+                const prevLogs = rows(prevLogsRes, "maintenance_logs (previous)");
+
                 const tons = prodArr.reduce((s, p) => s + num(p.tons_produced), 0);
                 const variable = prodArr.reduce(
                   (s, p) => s + num(p.magnetite_cost) + num(p.overtime_cost),
                   0,
                 );
-                const maint = (logs ?? []).reduce((s, l) => s + num(l.total_cost), 0);
-                const fixed = (statics ?? []).reduce((s, c) => s + num(c.amount), 0);
+                const maint = logs.reduce((s, l) => s + num(l.total_cost), 0);
+                const fixed = statics.reduce((s, c) => s + num(c.amount), 0);
 
                 const staticByCategory: Record<string, number> = {};
-                for (const c of statics ?? []) {
-                  const key = c.category ?? "uncategorised";
-                  staticByCategory[key] = (staticByCategory[key] ?? 0) + num(c.amount);
+                for (const c of statics) {
+                  const k = c.category ?? "uncategorised";
+                  staticByCategory[k] = (staticByCategory[k] ?? 0) + num(c.amount);
                 }
 
                 let magnetite = 0;
@@ -526,13 +567,21 @@ export const Route = createFileRoute("/api/chat")({
                   overtime += num(p.overtime_cost);
                 }
 
-                const prevTons = (prevProd ?? []).reduce((s, p) => s + num(p.tons_produced), 0);
-                const prevVariable = (prevProd ?? []).reduce(
+                const mineName = new Map(mines.map((m) => [m.id, m.name]));
+                const tonsByMine: Record<string, number> = {};
+                for (const p of prodArr) {
+                  const name = mineName.get(p.mine_id ?? "") ?? "unknown";
+                  tonsByMine[name] = (tonsByMine[name] ?? 0) + num(p.tons_produced);
+                }
+                for (const k of Object.keys(tonsByMine)) tonsByMine[k] = round2(tonsByMine[k]);
+
+                const prevTons = prevProd.reduce((s, p) => s + num(p.tons_produced), 0);
+                const prevVariable = prevProd.reduce(
                   (s, p) => s + num(p.magnetite_cost) + num(p.overtime_cost),
                   0,
                 );
-                const prevMaint = (prevLogs ?? []).reduce((s, l) => s + num(l.total_cost), 0);
-                const prevFixed = (prevStatics ?? []).reduce((s, c) => s + num(c.amount), 0);
+                const prevMaint = prevLogs.reduce((s, l) => s + num(l.total_cost), 0);
+                const prevFixed = prevStatics.reduce((s, c) => s + num(c.amount), 0);
                 const prevTotal = prevVariable + prevMaint + prevFixed;
 
                 const currentCostPerTon = tons > 0 ? (variable + maint + fixed) / tons : null;
@@ -552,23 +601,27 @@ export const Route = createFileRoute("/api/chat")({
                     "previous period has no production rows, so change figures are null",
                   );
                 }
-                if ((prevStatics ?? []).length === 0) {
-                  dataNotes.push("previous period has no static costs, so cost_per_ton comparison may be misleading");
+                if (prevStatics.length === 0) {
+                  dataNotes.push(
+                    "previous period has no static costs, so cost_per_ton comparison may be misleading",
+                  );
                 }
                 if (prodArr.length === 0) {
                   dataNotes.push("current period has no production rows in the window");
                 }
 
-                return withDerivedCosts({
+                const derived = withDerivedCosts({
                   window_months: n,
+                  window_named: win.named,
                   window_label: `${win.since} to ${win.until} (exclusive)`,
                   previous_window_label: `${win.prevSince} to ${win.prevUntil} (exclusive)`,
                   total_tons: tons,
                   variable_costs: variable,
                   maintenance_costs: maint,
                   static_costs: fixed,
-                  mine_count: (mines ?? []).length,
-                  client_count: (clients ?? []).length,
+                  mine_count: mines.length,
+                  client_count: clients.length,
+                  tons_by_mine: tonsByMine,
                   static_by_category: staticByCategory,
                   variable_by_component: { magnetite, overtime },
                   previous_period: {
@@ -583,13 +636,32 @@ export const Route = createFileRoute("/api/chat")({
                   },
                   dataNotes,
                 });
+
+                // Keep any _scope that withDerivedCosts already adds; otherwise supply one.
+                const existingScope = (derived as { _scope?: unknown })._scope;
+                return {
+                  ...derived,
+                  _scope: existingScope ?? {
+                    covers: `production, variable, maintenance and static costs across all mines for ${win.named} (complete calendar months), compared with the previous ${n} month(s)`,
+                    doesNotCover: [
+                      "costs per mine (only tonnes are split by mine)",
+                      "the current partial month",
+                      "revenue, profit or margin",
+                    ],
+                  },
+                };
               },
             }),
+
             headcount: recordTool("headcount", {
               description:
-                "How many employees REEF has, optionally broken down by mine or shift. Use this for questions like 'how many workers do we have', 'how many on the night shift', or 'who works at Kangala'.",
+                "How many employees REEF has, optionally broken down by mine or shift. Use this for questions like 'how many workers do we have', 'how many on the night shift', or 'how many people work at Kangala'. Pass the mine by NAME in mine_name, not by id.",
               inputSchema: z.object({
-                mine_id: z.string().uuid().optional().describe("Limit to one mine"),
+                mine_name: z
+                  .string()
+                  .optional()
+                  .describe("Limit to one mine by name (case-insensitive, partial match is fine)"),
+                mine_id: z.string().uuid().optional().describe("Limit to one mine by id"),
                 shift: z
                   .enum(["morning", "midday", "night"])
                   .optional()
@@ -600,42 +672,77 @@ export const Route = createFileRoute("/api/chat")({
                   .describe("Only count employees with active=true, default true"),
               }),
               execute: async ({
+                mine_name,
                 mine_id,
                 shift,
                 active_only,
               }: {
+                mine_name?: string;
                 mine_id?: string;
                 shift?: "morning" | "midday" | "night";
                 active_only?: boolean;
               }) => {
+                const mines = rows(
+                  await supabase.from("mines").select("id, name"),
+                  "mines",
+                );
+                const scope = {
+                  covers:
+                    "current active employee headcount, optionally filtered by mine or shift, with a breakdown by shift and by mine",
+                  doesNotCover: [
+                    "historical headcount",
+                    "individual personnel files or ID numbers",
+                    "contractors or sub-contractors",
+                  ],
+                };
+
+                let resolvedMineId = mine_id;
+                let resolvedMineName: string | null = null;
+                if (!resolvedMineId && mine_name) {
+                  const wanted = mine_name.trim().toLowerCase();
+                  const hit =
+                    mines.find((m) => m.name.toLowerCase() === wanted) ??
+                    mines.find((m) => m.name.toLowerCase().includes(wanted));
+                  if (!hit) {
+                    return {
+                      not_found: mine_name,
+                      mines_available: mines.map((m) => m.name),
+                      _scope: scope,
+                    };
+                  }
+                  resolvedMineId = hit.id;
+                  resolvedMineName = hit.name;
+                }
+
                 let q = supabase
                   .from("employees")
-                  .select("id, shift, active", { count: "exact" });
+                  .select("id, shift, active, mine_id", { count: "exact" });
                 if (active_only !== false) q = q.eq("active", true);
-                if (mine_id) q = q.eq("mine_id", mine_id);
+                if (resolvedMineId) q = q.eq("mine_id", resolvedMineId);
                 if (shift) q = q.eq("shift", shift);
                 const { data, count, error } = await q;
-                if (error) throw error;
+                if (error) throw new Error(`employees: ${error.message}`);
 
                 const list = data ?? [];
                 const byShift = list.reduce<Record<string, number>>((acc, e) => {
-                  const key = e.shift ?? "unknown";
-                  acc[key] = (acc[key] ?? 0) + 1;
+                  const k = e.shift ?? "unknown";
+                  acc[k] = (acc[k] ?? 0) + 1;
+                  return acc;
+                }, {});
+                const mineName = new Map(mines.map((m) => [m.id, m.name]));
+                const byMine = list.reduce<Record<string, number>>((acc, e) => {
+                  const k = mineName.get(e.mine_id ?? "") ?? "unassigned";
+                  acc[k] = (acc[k] ?? 0) + 1;
                   return acc;
                 }, {});
 
                 return {
                   total: count ?? list.length,
                   by_shift: byShift,
-                  _scope: {
-                    covers:
-                      "current active employee headcount, optionally filtered by mine or shift",
-                    doesNotCover: [
-                      "historical headcount",
-                      "individual personnel files or ID numbers",
-                      "contractors or sub-contractors",
-                    ],
-                  },
+                  by_mine: byMine,
+                  mine_filter: resolvedMineName,
+                  shift_filter: shift ?? null,
+                  _scope: scope,
                 };
               },
             }),
@@ -643,118 +750,28 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const groq = createGroq({ apiKey: key });
+        const modelMessages = await convertToModelMessages(uiMessages.slice(-10));
 
-        const recentMessages = uiMessages.slice(-10);
-        const modelMessages = await convertToModelMessages(recentMessages);
+        // Track every attempt's captured tool outputs so we can run the (log-only) scope check.
+        const attempts: Captured[][] = [];
 
-        // Attempt 1: normal call, model decides.
-        const captured1: Array<{ toolName: string; output: unknown }> = [];
-        const tools1 = buildTools(captured1);
-        const result1 = await generateText({
-          model: groq("openai/gpt-oss-120b") as never,
-          system: SYSTEM,
+        const { finalText, numberCheck } = await runReefie({
+          model: groq(MODEL_ID) as never,
+          system: buildSystemPrompt(),
           messages: modelMessages,
-          tools: tools1,
-          stopWhen: stepCountIs(6),
+          buildTools: (captured) => {
+            attempts.push(captured);
+            return buildTools(captured);
+          },
+          lastUserText,
         });
 
-        const check1 = verifyAnswer(result1.text, captured1.map((c) => c.output));
-
         // Log-only scope check: measure false positives without refusing.
-        const missingTerms = lastUserText
-          ? ungroundedTerms(lastUserText, captured1.map((c) => c.output))
-          : [];
-        if (missingTerms.length > 0) {
-          console.warn("[scope-guard] possible out-of-scope terms:", missingTerms);
-        }
-
-        let finalText: string;
-        let numberCheck: NumberCheck;
-        const allCaptured = [...captured1];
-
-        if (check1.ok && captured1.length > 0) {
-          finalText = result1.text;
-          numberCheck = { passed: true, unverifiedNumbers: [], reason: "ok" };
-        } else if (captured1.length === 0) {
-          // The model answered without calling a tool. Give it one more chance.
-          const retryMessages = [
-            ...modelMessages,
-            {
-              role: "user" as const,
-              content: [
-                {
-                  type: "text" as const,
-                  text: "You did not call a tool. Please call the appropriate tool to answer my previous question.",
-                },
-              ],
-            },
-          ];
-          const captured2: Array<{ toolName: string; output: unknown }> = [];
-          const tools2 = buildTools(captured2);
-          const result2 = await generateText({
-            model: groq("openai/gpt-oss-120b") as never,
-            system: SYSTEM,
-            messages: retryMessages,
-            tools: tools2,
-            stopWhen: stepCountIs(6),
-          });
-          allCaptured.push(...captured2);
-          const check2 = verifyAnswer(result2.text, captured2.map((c) => c.output));
-          if (check2.ok) {
-            finalText = result2.text;
-            numberCheck = { passed: true, unverifiedNumbers: [], reason: "ok" };
-          } else {
-            const bad = badValues(check2);
-            console.warn("reefie: no tool call on retry, unverified numbers:", bad);
-            finalText = buildFallbackAnswer(allCaptured);
-            numberCheck = { passed: false, unverifiedNumbers: bad, reason: "no_tool_call" };
-          }
-        } else {
-          // Retry once with feedback before falling back.
-          const bad = badValues(check1);
-          console.warn("reefie: retrying after unverified numbers:", bad);
-          const retryMessages = [
-            ...modelMessages,
-            {
-              role: "assistant" as const,
-              content: result1.text,
-            },
-            {
-              role: "user" as const,
-              content: [
-                {
-                  type: "text" as const,
-                  text:
-                    `Your draft contained numbers not in the tool results: ${bad.join(", ")}. ` +
-                    `Rewrite the answer using only the exact figures the tools returned. ` +
-                    `Do not invent or derive new numbers.`,
-                },
-              ],
-            },
-          ];
-          const captured3: Array<{ toolName: string; output: unknown }> = [];
-          const tools3 = buildTools(captured3);
-          const result3 = await generateText({
-            model: groq("openai/gpt-oss-120b") as never,
-            system: SYSTEM,
-            messages: retryMessages,
-            tools: tools3,
-            stopWhen: stepCountIs(3),
-          });
-          allCaptured.push(...captured3);
-          const check3 = verifyAnswer(result3.text, captured3.map((c) => c.output));
-          if (check3.ok && result3.text.trim().length > 0) {
-            finalText = result3.text;
-            numberCheck = { passed: true, unverifiedNumbers: [], reason: "ok" };
-          } else {
-            const bad3 = check3.ok ? [] : badValues(check3);
-            console.warn("reefie: retry also failed, unverified numbers:", bad3);
-            finalText = buildFallbackAnswer(allCaptured);
-            numberCheck = {
-              passed: false,
-              unverifiedNumbers: bad3.length > 0 ? bad3 : bad,
-              reason: "number_mismatch",
-            };
+        if (lastUserText) {
+          const outputs = attempts.flat().map((c) => c.output);
+          const missingTerms = ungroundedTerms(lastUserText, outputs);
+          if (missingTerms.length > 0) {
+            console.warn("[scope-guard] possible out-of-scope terms:", missingTerms);
           }
         }
 
