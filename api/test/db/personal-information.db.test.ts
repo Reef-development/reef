@@ -15,18 +15,11 @@ beforeAll(async () => {
   manager = await db.user("manager");
   worker = await db.user("worker");
 
-  await db.query(
-    "INSERT INTO plants (name) VALUES ('Kriel'), ('Ogies') ON CONFLICT DO NOTHING",
-  );
+  await db.query("INSERT INTO plants (name) VALUES ('Kriel'), ('Ogies') ON CONFLICT DO NOTHING");
 
   await db.transaction(async (tx) => {
-    await tx.query(
-      "SELECT set_config('request.jwt.claim.role', 'service_role', true)",
-    );
-    await tx.query(
-      "UPDATE profiles SET plant = 'Kriel' WHERE id = ANY($1)",
-      [[manager, worker]],
-    );
+    await tx.query("SELECT set_config('request.jwt.claim.role', 'service_role', true)");
+    await tx.query("UPDATE profiles SET plant = 'Kriel' WHERE id = ANY($1)", [[manager, worker]]);
   });
 
   const krielMine = await db.query<{ id: string }>(
@@ -91,10 +84,7 @@ describe("T11: updating protected employee personal information", () => {
   it("refuses a manager changing an identity number for another plant", async () => {
     await expect(
       db.as(manager, (tx) =>
-        tx.query(
-          "SELECT public.set_employee_id_number($1, '9999999999999')",
-          [ogiesEmployee],
-        ),
+        tx.query("SELECT public.set_employee_id_number($1, '9999999999999')", [ogiesEmployee]),
       ),
     ).rejects.toThrow();
   });
