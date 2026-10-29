@@ -52,6 +52,12 @@ export function lateCaptureProblem(
   today: string = reefToday(),
 ): string | null {
   const age = daysBetween(date, today);
+  if (age < 0) {
+    return (
+      `This entry is dated ${readableDate(date)}, which is in the future. ` +
+      `An entry can only be captured on or before today, ${readableDate(today)}.`
+    );
+  }
   if (age <= limitDays) return null;
   return (
     `This entry is dated ${readableDate(date)}, which is ${age} days ago. ` +
