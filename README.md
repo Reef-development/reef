@@ -16,6 +16,7 @@ needs, and works the answers out automatically.
 ## Contents
 
 - [Live system and demo accounts](#live-system-and-demo-accounts)
+- [Android app](#android-app)
 - [The team](#the-team)
 - [What it does](#what-it-does)
 - [How it is built](#how-it-is-built)
@@ -46,6 +47,26 @@ Sign in with one of these demo accounts:
 
 The password is all lower case and ends with a full stop. These accounts hold demo data only
 and are not real credentials.
+
+---
+
+## Android app
+
+An Android build of REEF is in this repository at [`releases/reef-debug.apk`](releases/reef-debug.apk)
+(about 4.4 MB). It is a native shell, built with Capacitor, that loads the deployed web app, so it always
+runs the latest release and uses the same sign-in, API and Reefie chat as the browser. It holds no business
+logic of its own, and it needs a network connection: with none, it shows a notice page.
+
+To install it:
+
+1. Download `reef-debug.apk` onto an Android phone.
+2. Open the file and allow installs from this source when the phone asks (it is a debug build, not from the
+   Play Store).
+3. Open **REEF** and sign in with one of the demo accounts above.
+
+To rebuild it from source (needs the Android SDK and Java), run `npm run sync` in `mobile/`, then
+`.\gradlew.bat assembleDebug` in `mobile/android/`. The APK is written to `app/build/outputs/apk/debug/`. The
+source is in [`mobile/`](mobile/).
 
 ---
 
