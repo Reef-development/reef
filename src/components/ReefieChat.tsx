@@ -3,14 +3,27 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  Conversation, ConversationContent, ConversationEmptyState, ConversationScrollButton,
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import {
-  PromptInput, PromptInputTextarea, PromptInputFooter, PromptInputSubmit,
+  PromptInput,
+  PromptInputTextarea,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputProvider,
 } from "@/components/ai-elements/prompt-input";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { Tool, ToolHeader, ToolContent, ToolInput, ToolOutput } from "@/components/ai-elements/tool";
+import {
+  Tool,
+  ToolHeader,
+  ToolContent,
+  ToolInput,
+  ToolOutput,
+} from "@/components/ai-elements/tool";
 import reefieAvatar from "@/assets/reefie-avatar.png";
 import { toast } from "sonner";
 
@@ -21,8 +34,17 @@ const SUGGESTIONS = [
   "What is our rand per ton this month and why?",
 ];
 
-export function ReefieChat({ threadId, initialMessages }: { threadId: string; initialMessages: UIMessage[] }) {
+export function ReefieChat({
+  threadId,
+  initialMessages,
+}: {
+  threadId: string;
+  initialMessages: UIMessage[];
+}) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftKey = `reefie:draft:${threadId}`;
+  const initialDraft =
+    typeof window === "undefined" ? "" : (window.sessionStorage.getItem(draftKey) ?? "");
 
   const { messages, sendMessage, status, stop } = useChat({
     id: threadId,
@@ -58,7 +80,15 @@ export function ReefieChat({ threadId, initialMessages }: { threadId: string; in
           {messages.length === 0 ? (
             <div className="py-10 animate-fade-up">
               <ConversationEmptyState
-                icon={<img src={reefieAvatar} alt="Reefie" width={512} height={512} className="w-14 h-14" />}
+                icon={
+                  <img
+                    src={reefieAvatar}
+                    alt="Reefie"
+                    width={512}
+                    height={512}
+                    className="w-14 h-14"
+                  />
+                }
                 title="Reefie"
                 description="Your R.E.E.F operations assistant — stock, maintenance, production and cost answers from live site data."
               />
@@ -86,7 +116,11 @@ export function ReefieChat({ threadId, initialMessages }: { threadId: string; in
                     }
                     if (part.type.startsWith("tool-")) {
                       const p = part as unknown as {
-                        type: string; state: never; input?: unknown; output?: unknown; errorText?: string;
+                        type: string;
+                        state: never;
+                        input?: unknown;
+                        output?: unknown;
+                        errorText?: string;
                       };
                       return (
                         <Tool defaultOpen={false} key={i}>
@@ -112,20 +146,33 @@ export function ReefieChat({ threadId, initialMessages }: { threadId: string; in
       </Conversation>
 
       <div className="max-w-3xl mx-auto w-full pt-3">
-        <PromptInput
-          onSubmit={(msg, e) => {
-            e.preventDefault();
-            const text = msg.text ?? "";
-            if (!text.trim() || busy) return;
-            void sendMessage({ text: text.trim() });
-            (e.currentTarget as HTMLFormElement).reset();
-          }}
-        >
-          <PromptInputTextarea ref={textareaRef} placeholder="Ask Reefie about stock, repairs, tonnes or costs…" />
-          <PromptInputFooter className="justify-end">
-            <PromptInputSubmit status={status} onStop={stop} />
-          </PromptInputFooter>
-        </PromptInput>
+        <PromptInputProvider key={threadId} initialInput={initialDraft}>
+          <PromptInput
+            onSubmit={async (msg, e) => {
+              e.preventDefault();
+              const text = msg.text ?? "";
+              if (!text.trim() || busy) return;
+              await sendMessage({ text: text.trim() });
+              window.sessionStorage.removeItem(draftKey);
+            }}
+          >
+            <PromptInputTextarea
+              ref={textareaRef}
+              placeholder="Ask Reefie about stock, repairs, tonnes or costs…"
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                if (value) {
+                  window.sessionStorage.setItem(draftKey, value);
+                } else {
+                  window.sessionStorage.removeItem(draftKey);
+                }
+              }}
+            />
+            <PromptInputFooter className="justify-end">
+              <PromptInputSubmit status={status} onStop={stop} />
+            </PromptInputFooter>
+          </PromptInput>
+        </PromptInputProvider>
       </div>
     </div>
   );
