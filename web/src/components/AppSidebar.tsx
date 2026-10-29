@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -128,12 +129,17 @@ const items = [
 ] as const;
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
 
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
   });
+
+  // On phones the menu is a slide-out drawer; close it once a page has been chosen.
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [currentPath, setOpenMobile]);
 
   return (
     <Sidebar collapsible="icon">
