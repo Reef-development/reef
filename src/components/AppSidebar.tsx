@@ -29,7 +29,7 @@ const items = [
 ] as const;
 
 export function AppSidebar() {
-  const { state, setOpenMobile, isMobile } = useSidebar();
+  const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const currentPath = useRouterState({ select: (r) => r.location.pathname });
 
@@ -61,13 +61,7 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.url} className="animate-fade-up" style={{ animationDelay: `${i * 25}ms` }}>
                     <SidebarMenuButton asChild isActive={active}>
-                      <Link
-                        to={item.url}
-                        className="flex items-center gap-2 group"
-                        onClick={() => {
-                          if (isMobile) setOpenMobile(false);
-                        }}
-                      >
+                      <Link to={item.url} className="flex items-center gap-2 group">
                         <item.icon className="w-4 h-4 shrink-0 transition-transform group-hover:scale-110 group-hover:text-sidebar-primary" />
                         {!collapsed && <span>{item.title}</span>}
                       </Link>
