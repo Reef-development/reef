@@ -12,4 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  nitro: {
+    // Override the default cloudflare target so Render gets a standard Node.js server
+    // that binds to the PORT environment variable and stays alive.
+    preset: "node-server",
+  },
 });
