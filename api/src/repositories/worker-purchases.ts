@@ -1,11 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ListQuery } from "@reef/shared";
-import type {
-  Page,
-  Row,
-  WorkerPurchaseFilters,
-  WorkerPurchasesRepository,
-} from "./types.js";
+import type { Page, Row, WorkerPurchaseFilters, WorkerPurchasesRepository } from "./types.js";
 
 /**
  * Worker purchases, backed by Supabase. Reads are scoped by RLS on the table, so
@@ -61,7 +56,7 @@ export function supabaseWorkerPurchases(db: SupabaseClient): WorkerPurchasesRepo
       };
     },
 
-       async create(input: unknown, loggedBy: string): Promise<Row> {
+    async create(input: unknown, loggedBy: string): Promise<Row> {
       const raw = input as Record<string, unknown>;
 
       // If the caller didn't say who bought it, it's their own claim. worker_id
@@ -77,8 +72,7 @@ export function supabaseWorkerPurchases(db: SupabaseClient): WorkerPurchasesRepo
           .eq("id", loggedBy)
           .maybeSingle();
         if (profileError) throw profileError;
-        workerId =
-          (profile as { employee_id: string | null } | null)?.employee_id ?? undefined;
+        workerId = (profile as { employee_id: string | null } | null)?.employee_id ?? undefined;
       }
 
       if (!workerId) {
@@ -131,9 +125,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 function firstOfThisMonth(): string {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-    .toISOString()
-    .slice(0, 10);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
 }
 
 function nextMonth(yyyymm: string): string {

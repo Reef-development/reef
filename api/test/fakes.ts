@@ -1122,6 +1122,20 @@ export function testApp(overrides: Partial<Repositories> = {}) {
         notifications,
         jobs,
         reorderRequests,
+        workerPurchases: {
+          list: async () => ({ rows: [], total: 0 }),
+          summary: async () => ({
+            pending_count: 0,
+            pending_total: 0,
+            paid_this_month_count: 0,
+            paid_this_month_total: 0,
+          }),
+          create: async () => {
+            throw new Error("workerPurchases.create is not faked");
+          },
+          setStatus: async () => null,
+          markPaid: async () => ({ paid: 0 }),
+        },
         ...overrides,
       };
     },
