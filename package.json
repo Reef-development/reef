@@ -3,9 +3,9 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
-  "overrides": {
-    "@tanstack/start-server-core": "1.169.39"
-  },
+"overrides": {
+  "@tanstack/start-server-core": "1.169.39"
+},
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
