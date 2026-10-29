@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, lateCaptureProblem, reefToday } from "@reef/shared";
+import { daysBetween, lateCaptureProblem, readableDate, reefToday } from "@reef/shared";
 import { STOCK, testApp } from "./fakes.js";
 
 const MINE = "00000000-0000-4000-8000-0000000000aa";
@@ -10,6 +10,8 @@ const daysAgo = (days: number) => {
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 };
+
+const daysAhead = (days: number) => daysAgo(-days);
 
 describe("T10: the rule itself", () => {
   it("accepts an entry exactly at the limit and refuses one a day older", () => {
@@ -161,5 +163,61 @@ describe("T10: the limit is a setting", () => {
       body: { value: 1 },
     });
     expect(unknown.status).toBe(400);
+  });
+});
+
+describe("T10: entries dated after today", () => {
+  it("refuses tomorrow and names the day the entry may not pass", () => {
+    expect(lateCaptureProblem("2026-10-03", 60, "2026-10-02")).toBe(
+      `This entry is dated ${readableDate("2026-10-03")}, which is in the future. ` +
+        `An entry can only be captured on or before today, ${readableDate("2026-10-02")}.`,
+    );
+  });
+
+  it("still accepts today itself", () => {
+    expect(lateCaptureProblem("2026-10-02", 60, "2026-10-02")).toBeNull();
+  });
+
+  it("refuses a production entry dated tomorrow and saves nothing", async () => {
+    const { call, production } = testApp();
+    const res = await call("POST", "/api/v1/production-logs", {
+      token: "worker-token",
+      body: { mine_id: MINE, tons_produced: 300, date: daysAhead(1) },
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.message).toMatch(/in the future/);
+    expect(production.rows).toHaveLength(0);
+  });
+
+  it("catches a mistyped year on a fuel slip, against the date field", async () => {
+    const { call } = testApp();
+    const res = await call("POST", "/api/v1/fuel-slips", {
+      token: "worker-token",
+      body: { vehicle_label: "LDV 3", litres: 40, cost_per_litre: 22, date: daysAhead(365) },
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.details).toEqual([
+      expect.objectContaining({ path: "date" }),
+    ]);
+  });
+
+  it("applies to repairs, and to managers and owners as well as workers", async () => {
+    const { call } = testApp();
+    const repair = await call("POST", "/api/v1/maintenance-logs", {
+      token: "manager-token",
+      body: {
+        equipment_id: EQUIPMENT,
+        description: "Repair booked ahead",
+        date: daysAhead(2),
+        parts: [{ stock_item_id: STOCK.bearing.id, qty: 1 }],
+      },
+    });
+    expect(repair.status).toBe(400);
+
+    const owner = await call("POST", "/api/v1/production-logs", {
+      token: "owner-token",
+      body: { mine_id: MINE, tons_produced: 1, date: daysAhead(30) },
+    });
+    expect(owner.status).toBe(400);
   });
 });
