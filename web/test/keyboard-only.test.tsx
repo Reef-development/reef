@@ -4,7 +4,7 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import { installBrowserShims, renderScreen } from "./helpers";
 
 // T20: one whole capture form completed using only the keyboard. No clicks: Tab moves between
-// fields, Enter opens the mine list, the arrow keys choose, Enter picks, digits are typed, and
+// editable fields, digits and notes are typed, and
 // Enter on the Save button sends it. The manual recording is the evidence for the sheet; this
 // test keeps it from quietly breaking.
 
@@ -19,15 +19,23 @@ vi.mock("@/lib/api", () => ({
   fetchMe: async () => ({ id: "worker-1", role: "worker" }),
   ApiRequestError: class extends Error {},
 }));
-vi.mock("@/lib/reef-db", () => ({
-  useList: () => ({
-    data: [
-      { id: "m1", name: "Highveld North Pit" },
-      { id: "m2", name: "Ogies Pit" },
-    ],
-    isLoading: false,
-  }),
-  NUM: (n: number) => String(n),
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: {
+    auth: { getUser: async () => ({ data: { user: { id: "worker-1" } } }) },
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data:
+              table === "profiles"
+                ? { employee_id: "employee-1" }
+                : { mine: { id: "m1", name: "Highveld North Pit" } },
+            error: null,
+          }),
+        }),
+      }),
+    }),
+  },
 }));
 vi.mock("sonner", () => ({ toast: { success: () => {}, error: () => {} } }));
 vi.mock("@/hooks/useCaptureLimit", () => ({
@@ -35,33 +43,18 @@ vi.mock("@/hooks/useCaptureLimit", () => ({
 }));
 
 beforeAll(() => installBrowserShims());
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  sent.length = 0;
+});
 
 describe("T20: a capture form completed with the keyboard alone", () => {
-  it("logs production: Tab, choose the mine with the arrow keys, type the tons, Enter on Save", async () => {
+  it("logs production for the assigned mine: Tab, type tons and notes, Enter on Save", async () => {
     const mod = await import("@/routes/worker/log-production.tsx");
     const { user } = await renderScreen(mod.Route.options.component as never);
-    await screen.findByRole("combobox", { name: "Mine" });
-
+    await screen.findByText("Highveld North Pit");
+    expect(screen.queryByRole("combobox", { name: "Mine" })).toBeNull();
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Mine" }));
-    await user.keyboard("{Enter}");
-    await screen.findByRole("listbox");
-    await user.keyboard("{ArrowDown}{Enter}");
-    await waitFor(() =>
-      expect(screen.getByRole("combobox", { name: "Mine" }).textContent).toMatch(/Pit/),
-    );
-    // The list hands focus back to its button once it has closed; let that happen before moving
-    // on, or it can take the focus back from the tons field mid-typing.
-    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
-    await waitFor(() =>
-      expect(document.activeElement).toBe(screen.getByRole("combobox", { name: "Mine" })),
-    );
-
-    await user.tab();
-    // The closed list can still move focus a moment later; give it that moment, then check the
-    // tons field still has it before typing.
-    await new Promise((r) => setTimeout(r, 150));
     expect(document.activeElement).toBe(screen.getByRole("spinbutton", { name: "Tons produced" }));
     await user.keyboard("240");
     // Under a busy test run the screen can lag the keys; wait until it shows all three digits.
@@ -72,12 +65,18 @@ describe("T20: a capture form completed with the keyboard alone", () => {
     );
 
     await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Notes" }));
+    await user.keyboard("Day shift production");
+    await user.tab();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /Save/ }));
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(sent).toHaveLength(1));
     expect(sent[0].to).toBe("/api/v1/production-logs");
-    expect(sent[0].body).toMatchObject({ tons_produced: 240 });
-    expect(["m1", "m2"]).toContain(sent[0].body.mine_id);
+    expect(sent[0].body).toMatchObject({
+      tons_produced: 240,
+      mine_id: "m1",
+      notes: "Day shift production",
+    });
   });
 });

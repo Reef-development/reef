@@ -17,7 +17,9 @@ const hold = (to: string, body: unknown) => {
 
 vi.mock("@/lib/api", () => ({
   api: (path: string, init?: { body?: string }) =>
-    hold(path, init?.body ? JSON.parse(init.body) : undefined).then(() => ({ data: { id: "new" } })),
+    hold(path, init?.body ? JSON.parse(init.body) : undefined).then(() => ({
+      data: { id: "new" },
+    })),
   apiListAll: async () => [],
   fetchMe: async () => ({ id: "worker-1", role: "worker" }),
   ApiRequestError: class extends Error {},
@@ -26,7 +28,17 @@ vi.mock("@/lib/api", () => ({
 vi.mock("@/integrations/supabase/client", () => ({
   supabase: {
     auth: { getUser: async () => ({ data: { user: { id: "worker-1" } } }) },
-    from: (table: string) => ({ insert: (row: unknown) => hold(table, row).then(() => ({ error: null })) }),
+    from: (table: string) => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: table === "profiles" ? { employee_id: "employee-1" } : { mine: DATA.mines[0] },
+            error: null,
+          }),
+        }),
+      }),
+      insert: (row: unknown) => hold(table, row).then(() => ({ error: null })),
+    }),
   },
 }));
 
@@ -36,13 +48,28 @@ vi.mock("sonner", () => ({ toast: { success: () => {}, error: () => {} } }));
 const DATA: Record<string, unknown[]> = {
   mines: [{ id: "22222222-0000-0000-0000-000000000001", name: "Highveld North Pit" }],
   equipment: [{ id: "33333333-0000-0000-0000-000000000001", name: "Conveyor CV-201" }],
-  stock_items: [{ id: "44444444-0000-0000-0000-000000000001", name: "Bearing 6205", qty_on_hand: 10, unit: "unit" }],
+  stock_items: [
+    {
+      id: "44444444-0000-0000-0000-000000000001",
+      name: "Bearing 6205",
+      qty_on_hand: 10,
+      unit: "unit",
+    },
+  ],
 };
 // Since T14 the stock pickers read each plant's levels through the API.
 vi.mock("@/hooks/useStock", () => ({
   STOCK_KEY: ["stock"],
   useStockOnHand: () => ({
-    data: [{ ...DATA.stock_items[0] as object, plant: "Kriel", reorder_point: 0, reorder_qty: 0, level: null }],
+    data: [
+      {
+        ...(DATA.stock_items[0] as object),
+        plant: "Kriel",
+        reorder_point: 0,
+        reorder_qty: 0,
+        level: null,
+      },
+    ],
     isLoading: false,
   }),
 }));
@@ -73,14 +100,20 @@ async function screenOf(path: string) {
   return mod.Route.options.component;
 }
 
-const FORMS: { name: string; file: string; fill: (user: User) => Promise<void>; save: string; table: string }[] = [
+const FORMS: {
+  name: string;
+  file: string;
+  fill: (user: User) => Promise<void>;
+  save: string;
+  table: string;
+}[] = [
   {
     name: "production",
     file: "log-production",
     table: "/api/v1/production-logs",
     save: "Save Production",
     fill: async (user) => {
-      await pick(user, screen.getByRole("combobox"), "Highveld North Pit");
+      await screen.findByText("Highveld North Pit");
       setNumber(screen.getByRole("spinbutton"), "300");
     },
   },
@@ -110,6 +143,7 @@ const FORMS: { name: string; file: string; fill: (user: User) => Promise<void>; 
     table: "/api/v1/fuel-slips",
     save: "Save",
     fill: async (user) => {
+      await screen.findByText("Highveld North Pit");
       await user.type(screen.getByPlaceholderText(/type vehicle/), "LDV 3");
       const [litres, price] = screen.getAllByRole("spinbutton");
       setNumber(litres, "40");
@@ -122,7 +156,7 @@ const FORMS: { name: string; file: string; fill: (user: User) => Promise<void>; 
     table: "downtime_events",
     save: "Save Downtime",
     fill: async (user) => {
-      await pick(user, screen.getAllByRole("combobox")[0], "Highveld North Pit");
+      await screen.findByText("Highveld North Pit");
     },
   },
 ];
@@ -141,6 +175,7 @@ describe("T18: a double tap on save creates one record, not two", () => {
       await form.fill(user);
       const save = screen.getByRole("button", { name: form.save });
 
+      expect(save).toBeEnabled();
       doubleTap(save);
       await waitFor(() => expect(sent.length).toBeGreaterThan(0));
       // Give a second save every chance to start before letting the first finish.
@@ -149,6 +184,10 @@ describe("T18: a double tap on save creates one record, not two", () => {
 
       const records = sent.filter((s) => s.to === form.table);
       expect(records, `${form.name}: records sent`).toHaveLength(1);
+      if (["production", "fuel", "downtime"].includes(form.name)) {
+        expect(records[0].body).toMatchObject({ mine_id: (DATA.mines[0] as { id: string }).id });
+        expect(screen.queryByRole("combobox", { name: "Mine" })).toBeNull();
+      }
     });
   }
 });

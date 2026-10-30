@@ -178,7 +178,7 @@ export function ReefieChat({
         <div className="mx-auto max-w-3xl">
           <PromptInput
             className="[&>[data-slot=input-group]]:rounded-2xl [&>[data-slot=input-group]]:border-border [&>[data-slot=input-group]]:bg-card [&>[data-slot=input-group]]:shadow-md"
-            onSubmit={(msg, e) => {
+            onSubmit={async (msg, e) => {
               e.preventDefault();
               const text = msg.text ?? "";
               if (!text.trim() || busy) return;
