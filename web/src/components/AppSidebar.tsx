@@ -143,7 +143,7 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
+      <SidebarHeader className="border-b border-sidebar-border pt-[calc(0.5rem_+_env(safe-area-inset-top))]">
         {collapsed ? (
           <div className="flex items-center justify-center py-2">
             <div className="w-8 h-8 rounded bg-sidebar-primary/10 flex items-center justify-center border border-sidebar-primary/30 transition-all hover:bg-sidebar-primary/20 hover:scale-105">
