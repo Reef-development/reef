@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -17,6 +18,7 @@ function Page() {
   const list = useList<any>("equipment", "name", true);
   const mines = useList<any>("mines", "name", true);
   const upsert = useUpsert("equipment");
+  const reason = useChangeReason();
   const remove = useRemove("equipment");
   const [editing, setEditing] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -28,8 +30,11 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       name: f.get("name"),
       type: f.get("type") || null,
       install_date: f.get("install_date") || null,
@@ -76,6 +81,7 @@ function Page() {
               <Field label="Service interval (days)"><Input name="service_interval_days" type="number" defaultValue={editing?.service_interval_days ?? ""} /></Field>
             </div>
             <Field label="Replacement cost (ZAR)"><Input name="replacement_cost" type="number" step="0.01" defaultValue={editing?.replacement_cost ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>

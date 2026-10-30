@@ -4,14 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useList } from "@/lib/reef-db";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/NumberField";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
-import { Camera } from "lucide-react";
+import { PhotoPicker } from "@/components/PhotoPicker";
 
 export const Route = createFileRoute("/worker/log-downtime")({ component: Page });
 
@@ -23,25 +23,61 @@ const REASONS = [
   { v: "other", l: "Other" },
 ];
 
+type MyMine = { id: string; name: string } | null;
+
 function Page() {
-  const mines = useList<any>("mines", "name", true);
+  // The worker's own mine: profiles.employee_id -> employees.mine_id -> mines.
+  // Resolved from the signed-in session, never chosen by the worker.
+  const myMine = useQuery<MyMine>({
+    queryKey: ["my-mine"],
+    queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return null;
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("employee_id")
+        .eq("id", uid)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      const employeeId = (profile as { employee_id: string | null } | null)?.employee_id;
+      if (!employeeId) return null;
+
+      const { data: employee, error: employeeError } = await supabase
+        .from("employees")
+        .select("mine_id, mine:mines(id, name)")
+        .eq("id", employeeId)
+        .maybeSingle();
+      if (employeeError) throw employeeError;
+
+      const mine = (employee as { mine?: { id: string; name: string } | null } | null)?.mine;
+      return mine ?? null;
+    },
+  });
+
   const equipment = useList<any>("equipment", "name", true);
-  const [mineId, setMineId] = useState("");
   const [equipId, setEquipId] = useState("");
   const [reason, setReason] = useState("breakdown");
   const [hours, setHours] = useState<number>(1);
   const [notes, setNotes] = useState("");
-  const [photos, setPhotos] = useState<FileList | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
+  const once = useOneAtATime();
   const submit = useMutation({
     mutationFn: async () => {
-      if (!mineId) throw new Error("Select mine");
+      const mine = myMine.data;
+      if (!mine) {
+        throw new Error(
+          "Your account is not assigned to a mine. Ask your manager to set it before logging downtime.",
+        );
+      }
       const { data: userRes } = await supabase.auth.getUser();
-      const photo_urls = photos ? await uploadPhotos(photos, "downtime") : [];
+      const photo_urls = photos.length ? await uploadPhotos(photos, "downtime") : [];
       const { error } = await supabase.from("downtime_events").insert({
-        mine_id: mineId,
+        mine_id: mine.id,
         equipment_id: equipId || null,
         reason,
         duration_hours: hours,
@@ -53,50 +89,67 @@ function Page() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["downtime_events"] });
+      qc.invalidateQueries({ queryKey: ["my-mine"] });
       toast.success("Downtime logged");
       navigate({ to: "/worker" });
     },
     onError: (e: any) => toast.error(e.message ?? "Failed"),
   });
 
+  const mineLabel = myMine.isLoading
+    ? "Loading…"
+    : myMine.data?.name ?? "No mine assigned";
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold">Log Downtime</h1>
+
       <div className="space-y-2">
-        <Label>Mine</Label>
-        <Select value={mineId} onValueChange={setMineId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Select mine" /></SelectTrigger>
-          <SelectContent>{mines.data?.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
-        </Select>
+        <Label htmlFor="log-downtime-mine">Mine</Label>
+        <div
+          id="log-downtime-mine"
+          className="h-12 flex items-center px-3 rounded-md border border-input bg-secondary/40 text-base"
+        >
+          {mineLabel}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          This is the mine your account is assigned to. Ask your manager if it looks wrong.
+        </p>
       </div>
+
       <div className="space-y-2">
-        <Label>Reason</Label>
+        <Label htmlFor="log-downtime-reason">Reason</Label>
         <Select value={reason} onValueChange={setReason}>
-          <SelectTrigger className="h-12 text-base"><SelectValue /></SelectTrigger>
+          <SelectTrigger id="log-downtime-reason" className="h-12 text-base"><SelectValue /></SelectTrigger>
           <SelectContent>{REASONS.map((r) => <SelectItem key={r.v} value={r.v}>{r.l}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+
       <div className="space-y-2">
-        <Label>Equipment (optional)</Label>
+        <Label htmlFor="log-downtime-equipment-optional">Equipment (optional)</Label>
         <Select value={equipId} onValueChange={setEquipId}>
-          <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Optional" /></SelectTrigger>
+          <SelectTrigger id="log-downtime-equipment-optional" className="h-12 text-base"><SelectValue placeholder="Optional" /></SelectTrigger>
           <SelectContent>{equipment.data?.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
         </Select>
       </div>
+
       <div className="space-y-2">
-        <Label>Duration (hours)</Label>
-        <NumberField step="0.25" className="h-12 text-lg" value={hours} onValueChange={setHours} />
+        <Label htmlFor="log-downtime-duration-hours">Duration (hours)</Label>
+        <NumberField id="log-downtime-duration-hours" step="0.25" className="h-12 text-lg" value={hours} onValueChange={setHours} />
       </div>
+
       <div className="space-y-2">
-        <Label>Notes (optional)</Label>
-        <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        <Label htmlFor="log-downtime-notes-optional">Notes (optional)</Label>
+        <Textarea id="log-downtime-notes-optional" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
-      <div className="space-y-2">
-        <Label className="flex items-center gap-2"><Camera className="w-4 h-4" />Photos (optional)</Label>
-        <Input type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
-        {photos && <p className="text-xs text-muted-foreground">{photos.length} photo(s) selected</p>}
-      </div>
-      <Button className="w-full h-14 text-base" onClick={() => submit.mutate()} disabled={submit.isPending}>
+
+      <PhotoPicker id="log-downtime-photos-optional" label="Photos (optional)" files={photos} onChange={setPhotos} />
+
+      <Button
+        className="w-full h-14 text-base"
+        onClick={() => once(() => submit.mutateAsync()).catch(() => {})}
+        disabled={submit.isPending || myMine.isLoading || !myMine.data}
+      >
         {submit.isPending ? "Saving…" : "Save Downtime"}
       </Button>
     </div>

@@ -32,6 +32,11 @@ dist-ssr
 *.sln
 *.sw?
 
-# Per-app environment files (never commit)
+# Local environment files
+.env
+web/.env
 api/.env
+
+supabase/.temp/
+
 web/.env

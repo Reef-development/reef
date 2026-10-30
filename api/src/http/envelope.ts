@@ -8,6 +8,12 @@ export function ok<T>(c: Context, data: T, status: ContentfulStatusCode = 200, m
 }
 
 export function fail(c: Context, err: ApiError) {
-  const body = { error: { code: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) } };
+  const body = {
+    error: {
+      code: err.code,
+      message: err.message,
+      ...(err.details ? { details: err.details } : {}),
+    },
+  };
   return c.json(body, ERROR_STATUS[err.code] as ContentfulStatusCode);
 }

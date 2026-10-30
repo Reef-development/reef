@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Id } from "./common.js";
+import { Id, versioned } from "./common.js";
 
 /** Columns a client may send. `.strict()` refuses anything else rather than silently dropping it. */
 export const MineInput = z
@@ -15,8 +15,12 @@ export const MineInput = z
 
 export const MinePatch = MineInput.partial().strict();
 
+/** What PATCH accepts: any of the fields, plus the version the client read. */
+export const MineUpdate = versioned(MinePatch);
+
 export type MineInput = z.infer<typeof MineInput>;
 export type MinePatch = z.infer<typeof MinePatch>;
+export type MineUpdate = z.infer<typeof MineUpdate>;
 
 export type Mine = {
   id: string;
@@ -26,6 +30,7 @@ export type Mine = {
   team_name: string | null;
   target_cost_per_ton: number | null;
   active: boolean;
+  version: number;
   created_at: string;
   updated_at: string;
 };

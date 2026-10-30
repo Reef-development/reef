@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { useList, useUpsert, useRemove, ZAR } from "@/lib/reef-db";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -17,6 +18,7 @@ type Client = { id: string; name: string; contact_name?: string; contact_email?:
 function Page() {
   const list = useList<Client>("clients", "name", true);
   const upsert = useUpsert("clients");
+  const reason = useChangeReason();
   const remove = useRemove("clients");
   const [editing, setEditing] = useState<Client | null>(null);
   const [open, setOpen] = useState(false);
@@ -24,8 +26,11 @@ function Page() {
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // An existing record is only changed with a reason, which the history keeps (T7).
+    const why = editing ? await reason.confirm() : null;
+    if (editing && why === null) return;
     await upsert.mutateAsync({
-      ...(editing?.id ? { id: editing.id } : {}),
+      ...(editing?.id ? { id: editing.id, changeReason: why } : {}),
       name: f.get("name"),
       contact_name: f.get("contact_name") || null,
       contact_email: f.get("contact_email") || null,
@@ -43,7 +48,7 @@ function Page() {
       <PageHeader title="Clients" description="Mining companies Reef has contracts with." actions={
         <Button onClick={() => { setEditing(null); setOpen(true); }}><Plus className="w-4 h-4 mr-1" />New client</Button>
       } />
-      <ResourceDialog title="client" open={open} onOpenChange={setOpen} editing={!!editing} trigger={<span />}>
+      <ResourceDialog title="client" open={open} onOpenChange={setOpen} editing={!!editing} trigger={null}>
         {() => (
           <form onSubmit={onSubmit} className="space-y-3">
             <Field label="Name"><Input name="name" required defaultValue={editing?.name} /></Field>
@@ -58,6 +63,7 @@ function Page() {
             </div>
             <Field label="Monthly revenue (ZAR)"><Input name="contract_revenue_monthly" type="number" step="0.01" defaultValue={editing?.contract_revenue_monthly ?? ""} placeholder="0" /></Field>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editing?.notes ?? ""} /></Field>
+            {editing && <ReasonField reason={reason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         )}

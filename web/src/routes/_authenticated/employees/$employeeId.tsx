@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, type FormEvent } from "react";
 import { useList, useUpsert, useRemove, NUM, ZAR } from "@/lib/reef-db";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
 import { Field } from "@/components/ResourceDialog";
+import { ReasonField, useChangeReason } from "@/components/ReasonField";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +42,8 @@ function Page() {
   const removeAtt = useRemove("attendance");
   const upsertTransfer = useUpsert("employee_transfers");
   const upsertEmp = useUpsert("employees");
+  const attReason = useChangeReason();
+  const transferReason = useChangeReason();
 
   const emp = employees.data?.find((e: any) => e.id === employeeId);
   const mineName = (id: string | null) => mines.data?.find((m: any) => m.id === id)?.name ?? "Unassigned";
@@ -68,14 +72,36 @@ function Page() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [toMine, setToMine] = useState("");
 
+  // T11: identity numbers are stored in a separate table and disclosed through
+  // the disclose_personal_information function. The function checks the caller's
+  // role inside the database and writes an audit row for both allowed and
+  // refused attempts. The identity number never appears on the employees row.
+  const [personalIdNumber, setPersonalIdNumber] = useState<string | null>(null);
+
+  const handlePersonalInformationLookup = async () => {
+    const { data, error } = await supabase.rpc("disclose_personal_information", {
+      _employee_id: employeeId,
+    });
+    if (error) {
+      console.error("Failed to disclose personal information:", error);
+      return;
+    }
+    if (data) {
+      setPersonalIdNumber(data as string);
+    }
+  };
+
   const openNewAtt = () => { setEditingAtt(null); setAttShift(emp?.shift ?? "morning"); setAttStatus("present"); setAttOpen(true); };
   const openEditAtt = (r: any) => { setEditingAtt(r); setAttShift(r.shift); setAttStatus(r.status); setAttOpen(true); };
 
   const saveAtt = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
+    // Correcting a day already captured needs a reason, which the history keeps (T7).
+    const why = editingAtt ? await attReason.confirm() : null;
+    if (editingAtt && why === null) return;
     await upsertAtt.mutateAsync({
-      ...(editingAtt?.id ? { id: editingAtt.id } : {}),
+      ...(editingAtt?.id ? { id: editingAtt.id, changeReason: why } : {}),
       employee_id: employeeId,
       mine_id: emp?.mine_id ?? null,
       date: f.get("date"),
@@ -93,14 +119,18 @@ function Page() {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     if (!toMine) return;
+    // A transfer changes the worker's own record (their mine), so its reason is required. The
+    // same words go on the transfer and into the history of the worker's record.
+    const why = await transferReason.confirm();
+    if (why === null) return;
     await upsertTransfer.mutateAsync({
       employee_id: employeeId,
       from_mine_id: emp?.mine_id ?? null,
       to_mine_id: toMine,
       transfer_date: f.get("transfer_date"),
-      reason: f.get("reason") || null,
+      reason: why,
     });
-    await upsertEmp.mutateAsync({ id: employeeId, mine_id: toMine });
+    await upsertEmp.mutateAsync({ id: employeeId, mine_id: toMine, changeReason: why });
     setTransferOpen(false);
   };
 
@@ -151,7 +181,24 @@ function Page() {
         <CardContent className="grid gap-3 sm:grid-cols-3 text-sm">
           <Info label="Employee no." value={emp.employee_no} />
           <Info label="Phone" value={emp.phone} />
-          <Info label="ID number" value={emp.id_number} />
+          <div>
+            <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              Personal information
+            </div>
+            {personalIdNumber ? (
+              <div>{personalIdNumber}</div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-1"
+                onClick={handlePersonalInformationLookup}
+              >
+                View personal information
+              </Button>
+            )}
+          </div>
           <Info label="Hire date" value={emp.hire_date} />
           <Info label="Hourly rate" value={`${ZAR(emp.hourly_rate)}/h`} />
           <Info label="Status" value={emp.active ? "Active" : "Inactive"} />
@@ -184,6 +231,7 @@ function Page() {
               <Field label="Tonnes"><Input name="tons_contributed" type="number" step="0.01" defaultValue={editingAtt?.tons_contributed ?? ""} placeholder="0" /></Field>
             </div>
             <Field label="Notes"><Textarea name="notes" rows={2} defaultValue={editingAtt?.notes ?? ""} /></Field>
+            {editingAtt && <ReasonField reason={attReason} />}
             <Button type="submit" className="w-full">Save</Button>
           </form>
         </DialogContent>
@@ -205,7 +253,7 @@ function Page() {
               </Select>
             </Field>
             <Field label="Transfer date"><Input name="transfer_date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
-            <Field label="Reason"><Textarea name="reason" rows={2} /></Field>
+            <ReasonField reason={transferReason} />
             <Button type="submit" className="w-full">Transfer worker</Button>
           </form>
         </DialogContent>

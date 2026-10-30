@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useList, ZAR, NUM } from "@/lib/reef-db";
+import { useList, ZAR, NUM, RPT } from "@/lib/reef-db";
+import { useStockOnHand } from "@/hooks/useStock";
+import { costPerTon } from "@reef/shared";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const production = useList<any>("production_logs", "date");
   const maint = useList<any>("maintenance_logs", "date");
-  const stock = useList<any>("stock_items");
+  const stock = useStockOnHand();
   const pos = useList<any>("purchase_orders");
   const staticCosts = useList<any>("static_costs", "month");
   const mines = useList<any>("mines");
@@ -43,7 +45,7 @@ function Dashboard() {
       .filter((s) => new Date(s.month).getMonth() === now.getMonth() && new Date(s.month).getFullYear() === now.getFullYear())
       .reduce((s, c) => s + Number(c.amount), 0);
     const totalCostMTD = maintSpend + magMTD + otMTD + staticMTD;
-    const rpt = tonsMTD > 0 ? totalCostMTD / tonsMTD : 0;
+    const rpt = costPerTon(totalCostMTD, tonsMTD);
 
     const inventoryValue = (stock.data ?? []).reduce((s, i) => s + Number(i.qty_on_hand) * Number(i.unit_cost), 0);
     const lowStock = (stock.data ?? []).filter((i) => Number(i.qty_on_hand) <= Number(i.reorder_point));
@@ -68,7 +70,7 @@ function Dashboard() {
     });
 
     // cost/ton trend (last 6 months)
-    const trend: { month: string; rpt: number }[] = [];
+    const trend: { month: string; rpt: number | null }[] = [];
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
@@ -80,7 +82,7 @@ function Dashboard() {
           .reduce((s, m) => s + Number(m.total_cost), 0)
         + (staticCosts.data ?? []).filter((s) => { const sd = new Date(s.month); return sd.getMonth() === d.getMonth() && sd.getFullYear() === d.getFullYear(); })
           .reduce((s, x) => s + Number(x.amount), 0);
-      trend.push({ month: d.toLocaleString("default", { month: "short" }), rpt: t > 0 ? Math.round(c / t) : 0 });
+      trend.push({ month: d.toLocaleString("default", { month: "short" }), rpt: t > 0 ? Math.round(c / t) : null });
     }
 
     // Equipment life remaining
@@ -108,7 +110,7 @@ function Dashboard() {
       <PageHeader title="Dashboard" description="Operational overview across all mines and contracts." />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard to="/analytics" label="Rand / Ton (MTD)" value={ZAR(stats.rpt)} icon={<TrendingUp className="w-4 h-4" />} />
+        <StatCard to="/analytics" label="Rand / Ton (MTD)" value={RPT(stats.rpt)} icon={<TrendingUp className="w-4 h-4" />} />
         <StatCard to="/production" label="Tonnes MTD" value={NUM(stats.tonsMTD)} sub={`${trend >= 0 ? "+" : ""}${trend.toFixed(1)}% vs last`} icon={<Fuel className="w-4 h-4" />} />
         <StatCard to="/maintenance" label="Maintenance MTD" value={ZAR(stats.maintSpend)} icon={<Wrench className="w-4 h-4" />} />
         <StatCard to="/inventory" label="Inventory Value" value={ZAR(stats.inventoryValue)} icon={<Boxes className="w-4 h-4" />} />

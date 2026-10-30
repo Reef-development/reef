@@ -1,6 +1,6 @@
 
 -- =========================================================
--- Reef Energy Engineering Fuels — schema
+-- Reef Energy Engineering Fuels - schema
 -- =========================================================
 
 -- Update timestamp helper

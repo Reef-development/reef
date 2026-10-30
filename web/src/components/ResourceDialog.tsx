@@ -7,7 +7,8 @@ export function ResourceDialog({
   title, trigger, children, onSave, editing, open: openProp, onOpenChange,
 }: {
   title: string;
-  trigger?: ReactNode;
+  /** null: the screen opens the dialog itself, so no trigger is rendered. */
+  trigger?: ReactNode | null;
   children: (close: () => void) => ReactNode;
   onSave?: () => void | Promise<void>;
   editing?: boolean;
@@ -19,7 +20,7 @@ export function ResourceDialog({
   const setOpen = onOpenChange ?? setInternal;
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      {trigger !== undefined ? (
+      {trigger === null ? null : trigger !== undefined ? (
         <DialogTrigger asChild>{trigger}</DialogTrigger>
       ) : (
         <DialogTrigger asChild><Button><Plus className="w-4 h-4 mr-1" />Add</Button></DialogTrigger>
@@ -32,6 +33,16 @@ export function ResourceDialog({
   );
 }
 
+/**
+ * A labelled form field. The label wraps its control, so the two are tied together: a screen
+ * reader announces the label with the control, and clicking the label focuses it. Every Field
+ * holds one control.
+ */
 export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="space-y-1.5"><label className="text-sm font-medium">{label}</label>{children}</div>;
+  return (
+    <label className="block space-y-1.5">
+      <span className="block text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
 }

@@ -8,7 +8,12 @@ import type { Registry, RouteInfo } from "../registry.js";
  * sign-in and permission checks that its `access` names, so a route cannot be exposed without
  * its guard being applied and listed.
  */
-export function defineRoute(app: Hono<AppEnv>, registry: Registry, info: RouteInfo, handler: Handler<AppEnv>) {
+export function defineRoute(
+  app: Hono<AppEnv>,
+  registry: Registry,
+  info: RouteInfo,
+  handler: Handler<AppEnv>,
+) {
   registry.add(info);
   const method = info.method.toLowerCase() as "get" | "post" | "patch" | "delete";
   if (info.access === "public") {

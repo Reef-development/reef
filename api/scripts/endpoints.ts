@@ -30,7 +30,8 @@ export function render(routes: RouteInfo[]): string {
     "| Method | Path | Who may call it | What it is for | What it refuses |",
     "|---|---|---|---|---|",
     ...routes.map(
-      (r) => `| ${r.method} | \`${r.path}\` | ${who(r.access)} | ${r.summary ?? NEEDS} | ${r.refuses ?? "-"} |`,
+      (r) =>
+        `| ${r.method} | \`${r.path}\` | ${who(r.access)} | ${r.summary ?? NEEDS} | ${r.refuses ?? "-"} |`,
     ),
     "",
   ];
@@ -51,7 +52,9 @@ if (process.argv.includes("--check")) {
     // missing file counts as drift
   }
   if (current !== text) {
-    console.error("docs/api-endpoints.md is out of date. Run `npm run endpoints` in api/ and commit the result.");
+    console.error(
+      "docs/api-endpoints.md is out of date. Run `npm run endpoints` in api/ and commit the result.",
+    );
     process.exit(1);
   }
   console.log(`Endpoint list matches the code (${registry.routes.length} endpoints).`);

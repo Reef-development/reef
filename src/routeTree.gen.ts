@@ -9,36 +9,45 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as WorkerRouteRouteImport } from './routes/worker/route'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as WorkerIndexRouteImport } from './routes/worker/index'
-import { Route as WorkerLogUsageRouteImport } from './routes/worker/log-usage'
-import { Route as WorkerLogRepairRouteImport } from './routes/worker/log-repair'
-import { Route as WorkerLogProductionRouteImport } from './routes/worker/log-production'
-import { Route as WorkerLogFuelRouteImport } from './routes/worker/log-fuel'
-import { Route as WorkerLogDowntimeRouteImport } from './routes/worker/log-downtime'
-import { Route as ApiChatRouteImport } from './routes/api/chat'
-import { Route as AuthenticatedSuppliersRouteImport } from './routes/_authenticated/suppliers'
-import { Route as AuthenticatedStaticCostsRouteImport } from './routes/_authenticated/static-costs'
-import { Route as AuthenticatedPurchaseOrdersRouteImport } from './routes/_authenticated/purchase-orders'
-import { Route as AuthenticatedProductionRouteImport } from './routes/_authenticated/production'
-import { Route as AuthenticatedMinesRouteImport } from './routes/_authenticated/mines'
-import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
-import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
-import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
-import { Route as AuthenticatedEquipmentRouteImport } from './routes/_authenticated/equipment'
-import { Route as AuthenticatedDowntimeRouteImport } from './routes/_authenticated/downtime'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
 import { Route as AuthenticatedAnalyticsRouteImport } from './routes/_authenticated/analytics'
+import { Route as AuthenticatedClientsRouteImport } from './routes/_authenticated/clients'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedDowntimeRouteImport } from './routes/_authenticated/downtime'
+import { Route as AuthenticatedEquipmentRouteImport } from './routes/_authenticated/equipment'
+import { Route as AuthenticatedFuelRouteImport } from './routes/_authenticated/fuel'
+import { Route as AuthenticatedInventoryRouteImport } from './routes/_authenticated/inventory'
+import { Route as AuthenticatedMaintenanceRouteImport } from './routes/_authenticated/maintenance'
+import { Route as AuthenticatedMinesRouteImport } from './routes/_authenticated/mines'
+import { Route as AuthenticatedProductionRouteImport } from './routes/_authenticated/production'
+import { Route as AuthenticatedPurchaseOrdersRouteImport } from './routes/_authenticated/purchase-orders'
 import { Route as AuthenticatedReefieRouteRouteImport } from './routes/_authenticated/reefie/route'
-import { Route as AuthenticatedReefieIndexRouteImport } from './routes/_authenticated/reefie/index'
+import { Route as AuthenticatedStaticCostsRouteImport } from './routes/_authenticated/static-costs'
+import { Route as AuthenticatedSuppliersRouteImport } from './routes/_authenticated/suppliers'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as WorkerIndexRouteImport } from './routes/worker/index'
+import { Route as WorkerLogDowntimeRouteImport } from './routes/worker/log-downtime'
+import { Route as WorkerLogFuelRouteImport } from './routes/worker/log-fuel'
+import { Route as WorkerLogProductionRouteImport } from './routes/worker/log-production'
+import { Route as WorkerLogRepairRouteImport } from './routes/worker/log-repair'
+import { Route as WorkerLogUsageRouteImport } from './routes/worker/log-usage'
 import { Route as AuthenticatedEmployeesIndexRouteImport } from './routes/_authenticated/employees/index'
-import { Route as AuthenticatedReefieThreadIdRouteImport } from './routes/_authenticated/reefie/$threadId'
 import { Route as AuthenticatedEmployeesEmployeeIdRouteImport } from './routes/_authenticated/employees/$employeeId'
+import { Route as AuthenticatedReefieIndexRouteImport } from './routes/_authenticated/reefie/index'
+import { Route as AuthenticatedReefieThreadIdRouteImport } from './routes/_authenticated/reefie/$threadId'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -49,75 +58,39 @@ const WorkerRouteRoute = WorkerRouteRouteImport.update({
   path: '/worker',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WorkerIndexRoute = WorkerIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const WorkerLogUsageRoute = WorkerLogUsageRouteImport.update({
-  id: '/log-usage',
-  path: '/log-usage',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const WorkerLogRepairRoute = WorkerLogRepairRouteImport.update({
-  id: '/log-repair',
-  path: '/log-repair',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const WorkerLogProductionRoute = WorkerLogProductionRouteImport.update({
-  id: '/log-production',
-  path: '/log-production',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const WorkerLogFuelRoute = WorkerLogFuelRouteImport.update({
-  id: '/log-fuel',
-  path: '/log-fuel',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const WorkerLogDowntimeRoute = WorkerLogDowntimeRouteImport.update({
-  id: '/log-downtime',
-  path: '/log-downtime',
-  getParentRoute: () => WorkerRouteRoute,
-} as any)
-const ApiChatRoute = ApiChatRouteImport.update({
-  id: '/api/chat',
-  path: '/api/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedSuppliersRoute = AuthenticatedSuppliersRouteImport.update({
-  id: '/suppliers',
-  path: '/suppliers',
+const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedStaticCostsRoute =
-  AuthenticatedStaticCostsRouteImport.update({
-    id: '/static-costs',
-    path: '/static-costs',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedPurchaseOrdersRoute =
-  AuthenticatedPurchaseOrdersRouteImport.update({
-    id: '/purchase-orders',
-    path: '/purchase-orders',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedProductionRoute = AuthenticatedProductionRouteImport.update({
-  id: '/production',
-  path: '/production',
+const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedMinesRoute = AuthenticatedMinesRouteImport.update({
-  id: '/mines',
-  path: '/mines',
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedDowntimeRoute = AuthenticatedDowntimeRouteImport.update({
+  id: '/downtime',
+  path: '/downtime',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedEquipmentRoute = AuthenticatedEquipmentRouteImport.update({
+  id: '/equipment',
+  path: '/equipment',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedFuelRoute = AuthenticatedFuelRouteImport.update({
+  id: '/fuel',
+  path: '/fuel',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMaintenanceRoute =
@@ -126,45 +99,84 @@ const AuthenticatedMaintenanceRoute =
     path: '/maintenance',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedInventoryRoute = AuthenticatedInventoryRouteImport.update({
-  id: '/inventory',
-  path: '/inventory',
+const AuthenticatedMinesRoute = AuthenticatedMinesRouteImport.update({
+  id: '/mines',
+  path: '/mines',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedFuelRoute = AuthenticatedFuelRouteImport.update({
-  id: '/fuel',
-  path: '/fuel',
+const AuthenticatedProductionRoute = AuthenticatedProductionRouteImport.update({
+  id: '/production',
+  path: '/production',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const AuthenticatedEquipmentRoute = AuthenticatedEquipmentRouteImport.update({
-  id: '/equipment',
-  path: '/equipment',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDowntimeRoute = AuthenticatedDowntimeRouteImport.update({
-  id: '/downtime',
-  path: '/downtime',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedClientsRoute = AuthenticatedClientsRouteImport.update({
-  id: '/clients',
-  path: '/clients',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAnalyticsRoute = AuthenticatedAnalyticsRouteImport.update({
-  id: '/analytics',
-  path: '/analytics',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
+const AuthenticatedPurchaseOrdersRoute =
+  AuthenticatedPurchaseOrdersRouteImport.update({
+    id: '/purchase-orders',
+    path: '/purchase-orders',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedReefieRouteRoute =
   AuthenticatedReefieRouteRouteImport.update({
     id: '/reefie',
     path: '/reefie',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedStaticCostsRoute =
+  AuthenticatedStaticCostsRouteImport.update({
+    id: '/static-costs',
+    path: '/static-costs',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedSuppliersRoute = AuthenticatedSuppliersRouteImport.update({
+  id: '/suppliers',
+  path: '/suppliers',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkerIndexRoute = WorkerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const WorkerLogDowntimeRoute = WorkerLogDowntimeRouteImport.update({
+  id: '/log-downtime',
+  path: '/log-downtime',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const WorkerLogFuelRoute = WorkerLogFuelRouteImport.update({
+  id: '/log-fuel',
+  path: '/log-fuel',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const WorkerLogProductionRoute = WorkerLogProductionRouteImport.update({
+  id: '/log-production',
+  path: '/log-production',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const WorkerLogRepairRoute = WorkerLogRepairRouteImport.update({
+  id: '/log-repair',
+  path: '/log-repair',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const WorkerLogUsageRoute = WorkerLogUsageRouteImport.update({
+  id: '/log-usage',
+  path: '/log-usage',
+  getParentRoute: () => WorkerRouteRoute,
+} as any)
+const AuthenticatedEmployeesIndexRoute =
+  AuthenticatedEmployeesIndexRouteImport.update({
+    id: '/employees/',
+    path: '/employees/',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedEmployeesEmployeeIdRoute =
+  AuthenticatedEmployeesEmployeeIdRouteImport.update({
+    id: '/employees/$employeeId',
+    path: '/employees/$employeeId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 const AuthenticatedReefieIndexRoute =
@@ -173,23 +185,11 @@ const AuthenticatedReefieIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedReefieRouteRoute,
   } as any)
-const AuthenticatedEmployeesIndexRoute =
-  AuthenticatedEmployeesIndexRouteImport.update({
-    id: '/employees/',
-    path: '/employees/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedReefieThreadIdRoute =
   AuthenticatedReefieThreadIdRouteImport.update({
     id: '/$threadId',
     path: '/$threadId',
     getParentRoute: () => AuthenticatedReefieRouteRoute,
-  } as any)
-const AuthenticatedEmployeesEmployeeIdRoute =
-  AuthenticatedEmployeesEmployeeIdRouteImport.update({
-    id: '/employees/$employeeId',
-    path: '/employees/$employeeId',
-    getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -384,6 +384,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -398,144 +412,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkerRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/worker/': {
-      id: '/worker/'
-      path: '/'
-      fullPath: '/worker/'
-      preLoaderRoute: typeof WorkerIndexRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/worker/log-usage': {
-      id: '/worker/log-usage'
-      path: '/log-usage'
-      fullPath: '/worker/log-usage'
-      preLoaderRoute: typeof WorkerLogUsageRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/worker/log-repair': {
-      id: '/worker/log-repair'
-      path: '/log-repair'
-      fullPath: '/worker/log-repair'
-      preLoaderRoute: typeof WorkerLogRepairRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/worker/log-production': {
-      id: '/worker/log-production'
-      path: '/log-production'
-      fullPath: '/worker/log-production'
-      preLoaderRoute: typeof WorkerLogProductionRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/worker/log-fuel': {
-      id: '/worker/log-fuel'
-      path: '/log-fuel'
-      fullPath: '/worker/log-fuel'
-      preLoaderRoute: typeof WorkerLogFuelRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/worker/log-downtime': {
-      id: '/worker/log-downtime'
-      path: '/log-downtime'
-      fullPath: '/worker/log-downtime'
-      preLoaderRoute: typeof WorkerLogDowntimeRouteImport
-      parentRoute: typeof WorkerRouteRoute
-    }
-    '/api/chat': {
-      id: '/api/chat'
-      path: '/api/chat'
-      fullPath: '/api/chat'
-      preLoaderRoute: typeof ApiChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/suppliers': {
-      id: '/_authenticated/suppliers'
-      path: '/suppliers'
-      fullPath: '/suppliers'
-      preLoaderRoute: typeof AuthenticatedSuppliersRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/static-costs': {
-      id: '/_authenticated/static-costs'
-      path: '/static-costs'
-      fullPath: '/static-costs'
-      preLoaderRoute: typeof AuthenticatedStaticCostsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/purchase-orders': {
-      id: '/_authenticated/purchase-orders'
-      path: '/purchase-orders'
-      fullPath: '/purchase-orders'
-      preLoaderRoute: typeof AuthenticatedPurchaseOrdersRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/production': {
-      id: '/_authenticated/production'
-      path: '/production'
-      fullPath: '/production'
-      preLoaderRoute: typeof AuthenticatedProductionRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/mines': {
-      id: '/_authenticated/mines'
-      path: '/mines'
-      fullPath: '/mines'
-      preLoaderRoute: typeof AuthenticatedMinesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/maintenance': {
-      id: '/_authenticated/maintenance'
-      path: '/maintenance'
-      fullPath: '/maintenance'
-      preLoaderRoute: typeof AuthenticatedMaintenanceRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/inventory': {
-      id: '/_authenticated/inventory'
-      path: '/inventory'
-      fullPath: '/inventory'
-      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/fuel': {
-      id: '/_authenticated/fuel'
-      path: '/fuel'
-      fullPath: '/fuel'
-      preLoaderRoute: typeof AuthenticatedFuelRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/equipment': {
-      id: '/_authenticated/equipment'
-      path: '/equipment'
-      fullPath: '/equipment'
-      preLoaderRoute: typeof AuthenticatedEquipmentRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/downtime': {
-      id: '/_authenticated/downtime'
-      path: '/downtime'
-      fullPath: '/downtime'
-      preLoaderRoute: typeof AuthenticatedDowntimeRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+    '/_authenticated/analytics': {
+      id: '/_authenticated/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/clients': {
@@ -545,11 +426,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedClientsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/analytics': {
-      id: '/_authenticated/analytics'
-      path: '/analytics'
-      fullPath: '/analytics'
-      preLoaderRoute: typeof AuthenticatedAnalyticsRouteImport
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/downtime': {
+      id: '/_authenticated/downtime'
+      path: '/downtime'
+      fullPath: '/downtime'
+      preLoaderRoute: typeof AuthenticatedDowntimeRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/equipment': {
+      id: '/_authenticated/equipment'
+      path: '/equipment'
+      fullPath: '/equipment'
+      preLoaderRoute: typeof AuthenticatedEquipmentRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/fuel': {
+      id: '/_authenticated/fuel'
+      path: '/fuel'
+      fullPath: '/fuel'
+      preLoaderRoute: typeof AuthenticatedFuelRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/inventory': {
+      id: '/_authenticated/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof AuthenticatedInventoryRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/maintenance': {
+      id: '/_authenticated/maintenance'
+      path: '/maintenance'
+      fullPath: '/maintenance'
+      preLoaderRoute: typeof AuthenticatedMaintenanceRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/mines': {
+      id: '/_authenticated/mines'
+      path: '/mines'
+      fullPath: '/mines'
+      preLoaderRoute: typeof AuthenticatedMinesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/production': {
+      id: '/_authenticated/production'
+      path: '/production'
+      fullPath: '/production'
+      preLoaderRoute: typeof AuthenticatedProductionRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/purchase-orders': {
+      id: '/_authenticated/purchase-orders'
+      path: '/purchase-orders'
+      fullPath: '/purchase-orders'
+      preLoaderRoute: typeof AuthenticatedPurchaseOrdersRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/reefie': {
@@ -559,12 +496,68 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedReefieRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/reefie/': {
-      id: '/_authenticated/reefie/'
+    '/_authenticated/static-costs': {
+      id: '/_authenticated/static-costs'
+      path: '/static-costs'
+      fullPath: '/static-costs'
+      preLoaderRoute: typeof AuthenticatedStaticCostsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/suppliers': {
+      id: '/_authenticated/suppliers'
+      path: '/suppliers'
+      fullPath: '/suppliers'
+      preLoaderRoute: typeof AuthenticatedSuppliersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/worker/': {
+      id: '/worker/'
       path: '/'
-      fullPath: '/reefie/'
-      preLoaderRoute: typeof AuthenticatedReefieIndexRouteImport
-      parentRoute: typeof AuthenticatedReefieRouteRoute
+      fullPath: '/worker/'
+      preLoaderRoute: typeof WorkerIndexRouteImport
+      parentRoute: typeof WorkerRouteRoute
+    }
+    '/worker/log-downtime': {
+      id: '/worker/log-downtime'
+      path: '/log-downtime'
+      fullPath: '/worker/log-downtime'
+      preLoaderRoute: typeof WorkerLogDowntimeRouteImport
+      parentRoute: typeof WorkerRouteRoute
+    }
+    '/worker/log-fuel': {
+      id: '/worker/log-fuel'
+      path: '/log-fuel'
+      fullPath: '/worker/log-fuel'
+      preLoaderRoute: typeof WorkerLogFuelRouteImport
+      parentRoute: typeof WorkerRouteRoute
+    }
+    '/worker/log-production': {
+      id: '/worker/log-production'
+      path: '/log-production'
+      fullPath: '/worker/log-production'
+      preLoaderRoute: typeof WorkerLogProductionRouteImport
+      parentRoute: typeof WorkerRouteRoute
+    }
+    '/worker/log-repair': {
+      id: '/worker/log-repair'
+      path: '/log-repair'
+      fullPath: '/worker/log-repair'
+      preLoaderRoute: typeof WorkerLogRepairRouteImport
+      parentRoute: typeof WorkerRouteRoute
+    }
+    '/worker/log-usage': {
+      id: '/worker/log-usage'
+      path: '/log-usage'
+      fullPath: '/worker/log-usage'
+      preLoaderRoute: typeof WorkerLogUsageRouteImport
+      parentRoute: typeof WorkerRouteRoute
     }
     '/_authenticated/employees/': {
       id: '/_authenticated/employees/'
@@ -573,19 +566,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedEmployeesIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/reefie/$threadId': {
-      id: '/_authenticated/reefie/$threadId'
-      path: '/$threadId'
-      fullPath: '/reefie/$threadId'
-      preLoaderRoute: typeof AuthenticatedReefieThreadIdRouteImport
-      parentRoute: typeof AuthenticatedReefieRouteRoute
-    }
     '/_authenticated/employees/$employeeId': {
       id: '/_authenticated/employees/$employeeId'
       path: '/employees/$employeeId'
       fullPath: '/employees/$employeeId'
       preLoaderRoute: typeof AuthenticatedEmployeesEmployeeIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/reefie/': {
+      id: '/_authenticated/reefie/'
+      path: '/'
+      fullPath: '/reefie/'
+      preLoaderRoute: typeof AuthenticatedReefieIndexRouteImport
+      parentRoute: typeof AuthenticatedReefieRouteRoute
+    }
+    '/_authenticated/reefie/$threadId': {
+      id: '/_authenticated/reefie/$threadId'
+      path: '/$threadId'
+      fullPath: '/reefie/$threadId'
+      preLoaderRoute: typeof AuthenticatedReefieThreadIdRouteImport
+      parentRoute: typeof AuthenticatedReefieRouteRoute
     }
   }
 }

@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
-@source "../src";
 @import "tw-animate-css";
+@source "../src";
+@source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -117,7 +118,8 @@
   --accent: oklch(0.279 0.041 260.031);
   --accent-foreground: oklch(0.984 0.003 247.858);
   --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  /* Dark text on the light dark-theme red: white on it was 2.76:1, below the 4.5:1 minimum (T20). */
+  --destructive-foreground: oklch(0.2 0.03 25);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.551 0.027 264.364);
@@ -344,3 +346,23 @@
   -moz-appearance: textfield;
   appearance: textfield;
 }
+
+/* ============ Reefie answers: plain, readable type ============ */
+/* The global h1/h2 style is uppercase Oswald, which is hard to read inside an answer. */
+.reefie-prose :is(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.reefie-prose h1 { font-size: 1.375rem; }
+.reefie-prose h2 { font-size: 1.25rem; }
+.reefie-prose h3 { font-size: 1.125rem; }
+.reefie-prose :is(p, li) { line-height: 1.75; }
+.reefie-prose ul { list-style: disc; list-style-position: outside; padding-left: 1.25rem; }
+.reefie-prose ol { list-style: decimal; list-style-position: outside; padding-left: 1.5rem; }
+.reefie-prose li::marker { color: var(--muted-foreground); }
+/* Wide tables scroll sideways inside their box instead of squashing every column. */
+.reefie-prose table { font-size: 0.9375rem; width: max-content; min-width: 100%; }
+.reefie-prose :is(th, td) { padding: 0.5rem 0.75rem; max-width: 22rem; }
