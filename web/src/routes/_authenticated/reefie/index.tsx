@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useThreads, createThread } from "./route";
+import { useThreads, createThread, THREADS_KEY } from "@/lib/reefie/threads";
 
 export const Route = createFileRoute("/_authenticated/reefie/")({ component: Page });
 
@@ -20,7 +20,7 @@ function Page() {
       }
       const id = await createThread();
       if (cancelled) return;
-      await qc.invalidateQueries({ queryKey: ["reefie_threads"] });
+      await qc.invalidateQueries({ queryKey: THREADS_KEY });
       navigate({ to: "/reefie/$threadId", params: { threadId: id }, replace: true });
     };
     void go();
