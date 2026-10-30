@@ -6,13 +6,10 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Coins,
   Copy,
-  FileText,
+  LayoutGrid,
   Loader2,
-  Package,
-  Wrench,
-  type LucideIcon,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,17 +33,13 @@ import {
   ToolInput,
   ToolOutput,
 } from "@/components/ai-elements/tool";
+import { QuickChatPicker } from "@/components/reefie/QuickChatPicker";
+import { CATEGORY_ICONS } from "@/components/reefie/category-icons";
+import { useQuickChats, type QuickChat } from "@/lib/reefie/quick-chats";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useIsMobile } from "@/hooks/use-mobile";
 import reefieAvatar from "@/assets/reefie-avatar.png";
 import { cn } from "@/lib/utils";
-
-const SUGGESTIONS: { icon: LucideIcon; label: string; text: string }[] = [
-  { icon: Package, label: "Stock", text: "What stock is below reorder point right now?" },
-  { icon: Wrench, label: "Equipment", text: "Which equipment is closest to end of life?" },
-  { icon: FileText, label: "Report", text: "Draft this month's performance report for the owner" },
-  { icon: Coins, label: "Costs", text: "What is our rand per ton this month and why?" },
-];
 
 const TOOL_LABELS: Record<string, string> = {
   inventory_status: "Stock levels",
@@ -119,9 +112,18 @@ export function ReefieChat({
     if (window.matchMedia("(pointer: fine)").matches) textareaRef.current?.focus();
   }, [threadId, status]);
 
+  const quick = useQuickChats();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
   const send = (text: string) => {
     if (!text.trim() || busy) return;
     void sendMessage({ text: text.trim() });
+  };
+
+  const sendQuick = (item: QuickChat) => {
+    if (busy) return;
+    quick.markUsed(item.id);
+    send(item.text);
   };
 
   return (
@@ -129,7 +131,11 @@ export function ReefieChat({
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="mx-auto w-full max-w-3xl gap-7 px-4 py-6 sm:px-6">
           {messages.length === 0 ? (
-            <EmptyState onPick={send} />
+            <EmptyState
+              items={quick.topThree}
+              onPick={sendQuick}
+              onMore={() => setPickerOpen(true)}
+            />
           ) : (
             messages.map((m, idx) => (
               <ChatMessage
@@ -181,9 +187,20 @@ export function ReefieChat({
               ref={textareaRef}
               aria-label="Message Reefie"
               placeholder={isMobile ? "Ask Reefie…" : "Ask about stock, repairs, tonnes or costs…"}
-              className="min-h-14 py-4 pl-4 pr-16 text-base md:text-base"
+              className="min-h-14 py-4 pl-14 pr-16 text-base md:text-base"
             />
             {/* The send button floats at the right edge so the box stays one line tall. */}
+            <PromptInputFooter className="absolute bottom-2 left-2 w-auto p-0">
+              <button
+                type="button"
+                onClick={() => setPickerOpen(true)}
+                aria-label="Quick chats"
+                title="Quick chats"
+                className="flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Zap className="size-5" />
+              </button>
+            </PromptInputFooter>
             <PromptInputFooter className="absolute bottom-2 right-2 w-auto p-0">
               <PromptInputSubmit status={status} onStop={stop} className="size-10 rounded-full" />
             </PromptInputFooter>
@@ -193,6 +210,7 @@ export function ReefieChat({
           </p>
         </div>
       </div>
+      <QuickChatPicker open={pickerOpen} onOpenChange={setPickerOpen} onPick={sendQuick} />
     </div>
   );
 }
@@ -209,9 +227,23 @@ function Avatar() {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({
+  items,
+  onPick,
+  onMore,
+}: {
+  items: QuickChat[];
+  onPick: (item: QuickChat) => void;
+  onMore: () => void;
+}) {
+  const card =
+    "animate-fade-up group flex min-h-[4.5rem] items-start gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left shadow-xs outline-none transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring";
+  const chip =
+    "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent/20 text-foreground";
+  const label = "block text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center py-2 sm:py-6 text-center animate-fade-up">
+    <div className="flex min-h-[50vh] animate-fade-up flex-col items-center justify-center py-2 text-center sm:py-6">
       <img
         src={reefieAvatar}
         alt="Reefie"
@@ -228,25 +260,44 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
       </p>
 
       <div className="mt-6 grid w-full max-w-2xl gap-2.5 sm:mt-8 sm:grid-cols-2">
-        {SUGGESTIONS.map(({ icon: Icon, label, text }, i) => (
-          <button
-            key={text}
-            type="button"
-            onClick={() => onPick(text)}
-            style={{ animationDelay: `${i * 60}ms` }}
-            className="animate-fade-up group flex min-h-[4.5rem] items-start gap-3 text-left rounded-xl border border-border bg-card px-4 py-3.5 shadow-xs outline-none transition hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent/20 text-foreground">
-              <Icon className="size-5" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {label}
+        {items.map((item, i) => {
+          const Icon = CATEGORY_ICONS[item.category];
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onPick(item)}
+              style={{ animationDelay: `${i * 60}ms` }}
+              className={card}
+            >
+              <span className={chip}>
+                <Icon className="size-5" />
               </span>
-              <span className="block text-[15px] leading-snug text-foreground">{text}</span>
+              <span className="min-w-0">
+                <span className={label}>{item.category}</span>
+                <span className="line-clamp-3 block text-[15px] leading-snug text-foreground">
+                  {item.text}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={onMore}
+          style={{ animationDelay: `${items.length * 60}ms` }}
+          className={card}
+        >
+          <span className={chip}>
+            <LayoutGrid className="size-5" />
+          </span>
+          <span className="min-w-0">
+            <span className={label}>More</span>
+            <span className="block text-[15px] leading-snug text-foreground">
+              Browse every quick chat, or add your own
             </span>
-          </button>
-        ))}
+          </span>
+        </button>
       </div>
     </div>
   );
