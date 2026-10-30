@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="50 50 412 412" width="512" height="512" role="img" aria-labelledby="t">
+  <title id="t">Reefie, the REEF operations assistant</title>
+  <!-- Hexagon badge: the REEF hexagon in brand navy with a gold inner border -->
+  <polygon points="256,60 425.7,158 425.7,354 256,452 86.3,354 86.3,158" fill="#0d1b2a"/>
+  <polygon points="256,80 408.4,168 408.4,344 256,432 103.6,344 103.6,168" fill="none" stroke="#f2c230" stroke-width="7" stroke-linejoin="round"/>
+
+  <!-- Hard hat -->
+  <path d="M166 218 A90 90 0 0 1 346 218 Z" fill="#f2c230"/>
+  <rect x="246" y="134" width="20" height="84" rx="8" fill="#c99a1c"/>
+  <rect x="146" y="208" width="220" height="16" rx="8" fill="#f2c230"/>
+
+  <!-- Face visor -->
+  <rect x="156" y="232" width="200" height="112" rx="42" fill="#17314a" stroke="#f2c230" stroke-width="5"/>
+  <circle cx="214" cy="279" r="17" fill="#f2c230"/>
+  <circle cx="298" cy="279" r="17" fill="#f2c230"/>
+  <circle cx="220" cy="273" r="5" fill="#0d1b2a"/>
+  <circle cx="304" cy="273" r="5" fill="#0d1b2a"/>
+  <path d="M226 313 Q256 334 286 313" fill="none" stroke="#f2c230" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- AI spark, kept clear of the border and the hat -->
+  <path d="M370 150 L376 167 L393 173 L376 179 L370 196 L364 179 L347 173 L364 167 Z" fill="#f2c230"/>
+</svg>
