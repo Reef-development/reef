@@ -106,6 +106,9 @@ export function ReefieChat({
   });
 
   const busy = status === "submitted" || status === "streaming";
+  const draftKey = `reefie:draft:${threadId}`;
+  const initialDraft =
+    typeof window === "undefined" ? "" : (window.sessionStorage.getItem(draftKey) ?? "");
 
   // Focus the box on desktop only. On a phone it would pop the keyboard over the answer.
   useEffect(() => {
@@ -179,14 +182,30 @@ export function ReefieChat({
               e.preventDefault();
               const text = msg.text ?? "";
               if (!text.trim() || busy) return;
-              void sendMessage({ text: text.trim() });
-              (e.currentTarget as HTMLFormElement).reset();
+              window.sessionStorage.removeItem(draftKey);
+
+              try {
+                await sendMessage({ text: text.trim() });
+              } catch (error) {
+                window.sessionStorage.setItem(draftKey, text);
+                throw error;
+              }
             }}
           >
             <PromptInputTextarea
+              key={threadId}
+              defaultValue={initialDraft}
               ref={textareaRef}
               aria-label="Message Reefie"
               placeholder={isMobile ? "Ask Reefie…" : "Ask about stock, repairs, tonnes or costs…"}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                if (value) {
+                  window.sessionStorage.setItem(draftKey, value);
+                } else {
+                  window.sessionStorage.removeItem(draftKey);
+                }
+              }}
               className="min-h-14 py-4 pl-14 pr-16 text-base md:text-base"
             />
             {/* The send button floats at the right edge so the box stays one line tall. */}
