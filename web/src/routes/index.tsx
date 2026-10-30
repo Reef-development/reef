@@ -16,9 +16,10 @@ export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     const me = await fetchMe();
     if (!me) throw redirect({ to: "/auth" });
-    if (me.role === "owner" || me.role === "manager") {
+    if (me.role === "owner") {
       throw redirect({ to: "/dashboard" });
     }
+
     throw redirect({ to: "/worker" });
   },
   component: () => null,
