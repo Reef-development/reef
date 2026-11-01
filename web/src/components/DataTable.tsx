@@ -86,14 +86,26 @@ export function DataTable<T extends { id: string }>({
   return (
     <div className="space-y-3">
       {searchable && (
-        <Input
-          type="search"
-          aria-label={searchLabel}
-          placeholder={`${searchLabel}…`}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-          className="max-w-xs"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            type="search"
+            aria-label={searchLabel}
+            placeholder={`${searchLabel}…`}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+            className="max-w-xs"
+          />
+          {query !== "" && (
+            <>
+              <Button type="button" size="sm" variant="ghost" onClick={() => { setQuery(""); setPage(1); }}>
+                Clear
+              </Button>
+              <span aria-live="polite" className="text-sm text-muted-foreground">
+                {shown.length} of {rows.length}
+              </span>
+            </>
+          )}
+        </div>
       )}
       <div className="border rounded-md bg-card overflow-x-auto">
         {/* On a phone the table keeps a readable width and scrolls sideways, rather than
