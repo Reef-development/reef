@@ -22,6 +22,7 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import {
   PromptInput,
   PromptInputFooter,
+  PromptInputProvider,
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
@@ -176,54 +177,56 @@ export function ReefieChat({
 
       <div className="shrink-0 bg-gradient-to-t from-background from-70% to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-6">
         <div className="mx-auto max-w-3xl">
-          <PromptInput
-            className="[&>[data-slot=input-group]]:rounded-2xl [&>[data-slot=input-group]]:border-border [&>[data-slot=input-group]]:bg-card [&>[data-slot=input-group]]:shadow-md"
-            onSubmit={async (msg, e) => {
-              e.preventDefault();
-              const text = msg.text ?? "";
-              if (!text.trim() || busy) return;
-              window.sessionStorage.removeItem(draftKey);
+          <PromptInputProvider key={threadId} initialInput={initialDraft}>
+            <PromptInput
+              className="[&>[data-slot=input-group]]:rounded-2xl [&>[data-slot=input-group]]:border-border [&>[data-slot=input-group]]:bg-card [&>[data-slot=input-group]]:shadow-md"
+              onSubmit={async (msg, e) => {
+                e.preventDefault();
+                const text = msg.text ?? "";
+                if (!text.trim() || busy) return;
+                window.sessionStorage.removeItem(draftKey);
 
-              try {
-                await sendMessage({ text: text.trim() });
-              } catch (error) {
-                window.sessionStorage.setItem(draftKey, text);
-                throw error;
-              }
-            }}
-          >
-            <PromptInputTextarea
-              key={threadId}
-              defaultValue={initialDraft}
-              ref={textareaRef}
-              aria-label="Message Reefie"
-              placeholder={isMobile ? "Ask Reefie…" : "Ask about stock, repairs, tonnes or costs…"}
-              onChange={(e) => {
-                const value = e.currentTarget.value;
-                if (value) {
-                  window.sessionStorage.setItem(draftKey, value);
-                } else {
-                  window.sessionStorage.removeItem(draftKey);
+                try {
+                  await sendMessage({ text: text.trim() });
+                } catch (error) {
+                  window.sessionStorage.setItem(draftKey, text);
+                  throw error;
                 }
               }}
-              className="min-h-14 py-4 pl-14 pr-16 text-base md:text-base"
-            />
-            {/* The send button floats at the right edge so the box stays one line tall. */}
-            <PromptInputFooter className="absolute bottom-2 left-2 w-auto p-0">
-              <button
-                type="button"
-                onClick={() => setPickerOpen(true)}
-                aria-label="Quick chats"
-                title="Quick chats"
-                className="flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Zap className="size-5" />
-              </button>
-            </PromptInputFooter>
-            <PromptInputFooter className="absolute bottom-2 right-2 w-auto p-0">
-              <PromptInputSubmit status={status} onStop={stop} className="size-10 rounded-full" />
-            </PromptInputFooter>
-          </PromptInput>
+            >
+              <PromptInputTextarea
+                ref={textareaRef}
+                aria-label="Message Reefie"
+                placeholder={
+                  isMobile ? "Ask Reefie…" : "Ask about stock, repairs, tonnes or costs…"
+                }
+                onChange={(e) => {
+                  const value = e.currentTarget.value;
+                  if (value) {
+                    window.sessionStorage.setItem(draftKey, value);
+                  } else {
+                    window.sessionStorage.removeItem(draftKey);
+                  }
+                }}
+                className="min-h-14 py-4 pl-14 pr-16 text-base md:text-base"
+              />
+              {/* The send button floats at the right edge so the box stays one line tall. */}
+              <PromptInputFooter className="absolute bottom-2 left-2 w-auto p-0">
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  aria-label="Quick chats"
+                  title="Quick chats"
+                  className="flex size-10 items-center justify-center rounded-full text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Zap className="size-5" />
+                </button>
+              </PromptInputFooter>
+              <PromptInputFooter className="absolute bottom-2 right-2 w-auto p-0">
+                <PromptInputSubmit status={status} onStop={stop} className="size-10 rounded-full" />
+              </PromptInputFooter>
+            </PromptInput>
+          </PromptInputProvider>
           <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">
             Enter to send · Shift+Enter for a new line
           </p>
