@@ -168,7 +168,7 @@ function Page() {
           <DialogHeader><DialogTitle>{editing ? "Edit fuel slip" : "New fuel slip"}</DialogTitle></DialogHeader>
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Date"><Input name="date" type="date" required min={editing ? undefined : limit.earliest} defaultValue={editing?.date ?? limit.today} />{!editing && <p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p>}</Field>
+              <Field label="Date"><Input name="date" type="date" required min={editing ? undefined : limit.earliest} max={limit.latest} defaultValue={editing?.date ?? limit.today} />{!editing && <p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p>}</Field>
               <Field label="Slip no."><Input name="slip_no" defaultValue={editing?.slip_no ?? ""} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
