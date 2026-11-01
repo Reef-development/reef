@@ -120,3 +120,35 @@ describe("T18: the production table filters", () => {
     expect(screen.queryByRole("navigation", { name: "Pages" })).toBeNull();
   });
 });
+
+describe("T18: the production table search can be cleared", () => {
+  it("offers no clear control until something has been typed", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("says how many rows matched while the search is on", async () => {
+    const { user } = setup();
+    await user.type(screen.getByRole("searchbox"), "ogies");
+    expect(screen.getByText("20 of 60")).toBeTruthy();
+  });
+
+  it("puts every row back and returns to the first page", async () => {
+    const { user } = setup();
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.type(screen.getByRole("searchbox"), "ogies");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+    expect(screen.getByText("Showing 1–25 of 60")).toBeTruthy();
+    expect(screen.getByText("Page 1 of 3")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("keeps the sort when the search is cleared", async () => {
+    const { user } = setup();
+    await user.click(within(screen.getByRole("columnheader", { name: /Tons/ })).getByRole("button"));
+    await user.type(screen.getByRole("searchbox"), "kriel");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(column(2).slice(0, 3)).toEqual(["10", "20", "30"]);
+  });
+});
