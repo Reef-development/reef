@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useOneAtATime } from "@/hooks/useOneAtATime";
 import { toast } from "sonner";
 import { uploadPhotos } from "@/lib/photo-upload";
-import { Camera } from "lucide-react";
+import { PhotoPicker } from "@/components/PhotoPicker";
 
 export const Route = createFileRoute("/worker/log-repair")({ component: Page });
 
@@ -21,7 +21,7 @@ function Page() {
   const [equipId, setEquipId] = useState("");
   const [desc, setDesc] = useState("");
   const [cost, setCost] = useState<number>(0);
-  const [photos, setPhotos] = useState<FileList | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -30,7 +30,7 @@ function Page() {
     mutationFn: async () => {
       if (!equipId) throw new Error("Select equipment");
       if (!desc) throw new Error("Enter a description");
-      const photo_urls = photos ? await uploadPhotos(photos, "repairs") : [];
+      const photo_urls = photos.length ? await uploadPhotos(photos, "repairs") : [];
       // The API records who logged it from the sign-in, so the screen does not send it.
       await api("/api/v1/maintenance-logs", {
         method: "POST",
@@ -71,11 +71,7 @@ function Page() {
         <Label htmlFor="log-repair-labour-cost-zar">Labour cost (ZAR)</Label>
         <NumberField id="log-repair-labour-cost-zar" step="0.01" className="h-12 text-lg" value={cost} onValueChange={setCost} />
       </div>
-      <div className="space-y-2">
-        <Label htmlFor="log-repair-photos-optional" className="flex items-center gap-2"><Camera className="w-4 h-4" />Photos (optional)</Label>
-        <Input id="log-repair-photos-optional" type="file" accept="image/*" capture="environment" multiple onChange={(e) => setPhotos(e.target.files)} />
-        {photos && <p className="text-xs text-muted-foreground">{photos.length} photo(s) selected</p>}
-      </div>
+      <PhotoPicker id="log-repair-photos-optional" label="Photos (optional)" files={photos} onChange={setPhotos} />
       <Button className="w-full h-14 text-base" onClick={() => once(() => submit.mutateAsync()).catch(() => {})} disabled={submit.isPending}>
         {submit.isPending ? "Saving…" : "Save Repair"}
       </Button>

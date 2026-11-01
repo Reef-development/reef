@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard,
@@ -17,6 +18,7 @@ import {
   Fuel,
   History,
   MonitorSmartphone,
+  Banknote,
 } from "lucide-react";
 
 import {
@@ -43,6 +45,11 @@ const items = [
     title: "Cost Analytics",
     url: "/analytics",
     icon: LineChart,
+  },
+  {
+    title: "Reimbursements",
+    url: "/reimbursements",
+    icon: Banknote,
   },
   {
     title: "Reefie",
@@ -122,16 +129,21 @@ const items = [
 ] as const;
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
 
   const currentPath = useRouterState({
     select: (r) => r.location.pathname,
   });
 
+  // On phones the menu is a slide-out drawer; close it once a page has been chosen.
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [currentPath, setOpenMobile]);
+
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
+      <SidebarHeader className="border-b border-sidebar-border pt-[calc(0.5rem_+_env(safe-area-inset-top))]">
         {collapsed ? (
           <div className="flex items-center justify-center py-2">
             <div className="w-8 h-8 rounded bg-sidebar-primary/10 flex items-center justify-center border border-sidebar-primary/30 transition-all hover:bg-sidebar-primary/20 hover:scale-105">

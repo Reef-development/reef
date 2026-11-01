@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">REEF</string>
+    <string name="title_activity_main">REEF</string>
+    <string name="package_name">za.co.reef.operations</string>
+    <string name="custom_url_scheme">za.co.reef.operations</string>
+</resources>

@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-REPO="VanNiekerkJoe/reef-development-"
+REPO="Reef-development/reef"
 
 GH_BRADLEY="RwafaBradley"
 GH_LEO="VanNiekerkJoe"
@@ -22,14 +22,20 @@ fi
 OWNER="${REPO%%/*}"
 
 echo "Creating the project board..."
-PROJECT_URL="$(gh project create --owner "$OWNER" --title "$PROJECT_TITLE" --format json --jq '.url')"
-echo " $PROJECT_URL"
+gh project create --owner "$OWNER" --title "$PROJECT_TITLE"
+
+PROJECT_NUMBER="1"
+PROJECT_URL="https://github.com/orgs/Reef-development/projects/$PROJECT_NUMBER"
+
+echo "Using project: $PROJECT_URL"
 
 echo "Making sure the stage labels exist..."
 
-for stage in "repository" "gaps" "tests" "documents" "live"; do
-gh label create "stage:$stage" --repo "$REPO" --color BFD4D1 --force >/dev/null
-done
+gh label create "stage:repository" --repo "$REPO" --color BFD4D1 --force >/dev/null
+gh label create "stage:gaps" --repo "$REPO" --color BFD4D1 --force >/dev/null
+gh label create "stage:tests" --repo "$REPO" --color BFD4D1 --force >/dev/null
+gh label create "stage:documents" --repo "$REPO" --color BFD4D1 --force >/dev/null
+gh label create "stage:live" --repo "$REPO" --color BFD4D1 --force >/dev/null
 
 gh_user_for() {
 
@@ -51,9 +57,9 @@ esac
 
 }
 
-tail -n +2 "$CSV" | while IFS='|' read -r id title owner checker days day after stage; do
+tail -n +2 "$CSV" | sed 's/\r$//' | while IFS='|' read -r id title owner checker days day after stage; do
 
-[ -z "${id:-}" ] && continue
+[ -z "${id//[[:space:]]/}" ] && continue
 
 assignee="$(gh_user_for "$owner")"
 

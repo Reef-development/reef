@@ -2,7 +2,7 @@
 
 Generated from the route registry by `npm run endpoints` in `api/`. Do not edit by hand.
 
-71 endpoints, 71 explained.
+76 endpoints, 76 explained.
 
 | Method | Path | Who may call it | What it is for | What it refuses |
 |---|---|---|---|---|
@@ -77,3 +77,8 @@ Generated from the route registry by `npm run endpoints` in `api/`. Do not edit 
 | PATCH | `/api/v1/notifications/:id/read` | owner, manager, worker | Marks one of your own notifications as read. | A notification belonging to somebody else, and one already read, both as 404. Marking a notification read is not a change anybody needs to be warned about, so this one carries no version check. |
 | GET | `/api/v1/settings` | owner, manager, worker | Lists the platform settings with their current values. Every role reads them, because the capture forms need the age limit. | A caller with no role. |
 | PATCH | `/api/v1/settings/:key` | owner | Changes one setting. Owner only, because a setting such as the capture age limit changes what every plant may record. | An unknown setting, or a value outside what that setting allows (the age limit is 1 to 365 whole days). |
+| GET | `/api/v1/worker-purchases` | Any signed-in user | Lists worker purchase claims the caller can see. A worker sees their own, a manager sees their plant, an owner sees everything. Filter by status, worker, mine, or month. | An unknown sort column, an unknown status filter, or a page size above 200. |
+| GET | `/api/v1/worker-purchases/summary` | Any signed-in user | Totals the caller can see: outstanding pending claims and claims paid this month. For the dashboard tile. | Nobody signed in. |
+| POST | `/api/v1/worker-purchases` | Any signed-in user | Records a purchase a worker paid for out of pocket. A worker submits for themselves; a supervisor may submit on someone else's behalf. Amount must be positive and the date cannot be in the future. | A missing worker, description, category or amount; a zero or negative amount; a date in the future; a worker id that is not a UUID. |
+| PATCH | `/api/v1/worker-purchases/:id/status` | owner, manager | Marks one claim paid, or voids it with a reason. The owner's action at month end. Paid sets paid_on and paid_by; voided requires a reason. | A claim that does not exist; a status other than paid or voided; a void with no reason; a caller who is not an owner. |
+| POST | `/api/v1/worker-purchases/mark-paid` | owner, manager | Marks a batch of claims paid in one call. The confirmation dialog uses this so a month-end payout is one transaction, not ten. | An empty list; any id in the list that does not exist or is not a pending claim; a caller who is not an owner. |

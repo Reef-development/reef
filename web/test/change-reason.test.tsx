@@ -70,9 +70,22 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/integrations/supabase/client", () => {
+  // A read chains its filters (order, gte, limit) and is awaited at the end, as supabase-js is.
+  const read = (data: unknown[]) => {
+    const result = { data, error: null };
+    const chain: Record<string, unknown> = {
+      order: () => chain,
+      gte: () => chain,
+      limit: () => chain,
+      then: (ok: (r: typeof result) => unknown, bad?: (e: unknown) => unknown) =>
+        Promise.resolve(result).then(ok, bad),
+    };
+    return chain;
+  };
   const query = (table: string) => ({
     select: () => query(table),
-    order: async () => ({ data: SUPABASE_ROWS[table] ?? [], error: null }),
+    gte: () => query(table),
+    order: () => read(SUPABASE_ROWS[table] ?? []),
     upsert: (row: Record<string, unknown>) => {
       upserted.push({ table, row });
       return { select: () => ({ single: async () => ({ data: row, error: null }) }) };

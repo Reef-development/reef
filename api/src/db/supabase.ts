@@ -24,6 +24,7 @@ import {
   SupabaseTableRepository,
   SupabaseUserRepository,
 } from "../repositories/supabase.js";
+import { supabaseWorkerPurchases } from "../repositories/worker-purchases.js";
 import type { JobRepository, ServiceSweepRepository } from "../repositories/types.js";
 
 /**
@@ -60,6 +61,7 @@ export function supabaseRepositories(config: Config) {
       jobs: new SupabaseJobRepository(db),
       purchaseActions: new SupabasePurchaseActions(db),
       settings: new SupabaseSettings(db),
+      workerPurchases: supabaseWorkerPurchases(db),
     };
   };
 }

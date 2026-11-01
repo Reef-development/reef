@@ -12,11 +12,10 @@ export function useCaptureLimit() {
     queryFn: async () => (await api<{ key: string; value: unknown }[]>("/api/v1/settings")).data,
     staleTime: 5 * 60_000,
   });
-  const days = Number(
-    settings.data?.find((s) => s.key === "capture_max_age_days")?.value ?? DEFAULT_CAPTURE_MAX_AGE_DAYS,
-  );
+  const setting = Number(settings.data?.find((s) => s.key === "capture_max_age_days")?.value);
+  const days = Number.isInteger(setting) && setting > 0 ? setting : DEFAULT_CAPTURE_MAX_AGE_DAYS;
   const today = reefToday();
   const earliest = new Date(`${today}T00:00:00Z`);
   earliest.setUTCDate(earliest.getUTCDate() - days);
-  return { days, today, earliest: earliest.toISOString().slice(0, 10) };
+  return { days, today, latest: today, earliest: earliest.toISOString().slice(0, 10) };
 }

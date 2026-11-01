@@ -91,7 +91,7 @@ function Page() {
                   <SelectContent>{equipment.data?.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent>
                 </Select>
               </Field>
-              <Field label="Date"><Input name="date" type="date" required min={limit.earliest} max={limit.today} defaultValue={limit.today} /><p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p></Field>
+              <Field label="Date"><Input name="date" type="date" required min={limit.earliest} max={limit.latest} defaultValue={limit.today} /><p className="text-xs text-muted-foreground mt-1">Entries older than {limit.days} days can't be captured.</p></Field>
             </div>
             <Field label="Description"><Input name="description" required placeholder="What was repaired" /></Field>
             <div className="grid grid-cols-3 gap-3">

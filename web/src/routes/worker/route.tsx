@@ -27,7 +27,7 @@ function WorkerLayout() {
   };
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="h-16 border-b flex items-center gap-2 px-3 sticky top-0 z-10" style={{ backgroundColor: "#0d1b2a" }}>
+      <header className="h-[calc(4rem_+_env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b flex items-center gap-2 px-3 sticky top-0 z-10" style={{ backgroundColor: "#0d1b2a" }}>
         <Link to="/worker" className="p-2 -ml-2 rounded hover:bg-white/10 text-white">
           <ArrowLeft className="w-5 h-5" />
         </Link>

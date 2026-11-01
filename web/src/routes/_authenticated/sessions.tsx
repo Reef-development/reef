@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
+import { deviceLabel } from "@/lib/device-label";
 
 type UserSession = {
   id: string;
@@ -167,7 +168,7 @@ function Page() {
                 className="rounded-lg border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
               >
                 <div className="space-y-1">
-                  <p className="font-medium">{session.device ?? "Unknown device"}</p>
+                  <p className="font-medium">{deviceLabel(session.device)}</p>
 
                   <p className="text-sm text-muted-foreground">
                     Address: {session.address ?? "Unknown"}
@@ -220,7 +221,7 @@ function Page() {
             className="rounded-lg border p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
           >
             <div className="space-y-1">
-              <p className="font-medium">{session.device ?? "Unknown device"}</p>
+              <p className="font-medium">{deviceLabel(session.device)}</p>
 
               <p className="text-sm text-muted-foreground">
                 Address: {session.address ?? "Unknown"}

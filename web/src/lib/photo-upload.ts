@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { api } from "@/lib/api";
 
-type Folder = "repairs" | "fuel" | "downtime";
+type Folder = "repairs" | "fuel" | "downtime" | "receipts";
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 
 /**

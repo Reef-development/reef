@@ -32,6 +32,7 @@ import type {
   UserRepository,
   UserSession,
 } from "./types.js";
+import { supabaseWorkerPurchases } from "./worker-purchases.js";
 
 type PgError = { code?: string; message: string };
 
@@ -51,9 +52,7 @@ function translate(err: PgError): ApiError {
     case "RF422":
       return new ApiError("VALIDATION_FAILED", err.message);
     case "23514":
-      // update_versioned raises this when the reason is missing.
       return new ApiError("VALIDATION_FAILED", "A reason is required when changing a record");
-    // Raised by the database functions with a message written for the person reading it.
     case "22023":
       return new ApiError("VALIDATION_FAILED", err.message);
     case "RF404":
@@ -65,11 +64,6 @@ function translate(err: PgError): ApiError {
   }
 }
 
-/**
- * The repository for one table. Updates go through the `update_versioned` stored procedure,
- * which sets the reason on the transaction; the trigger on the table reads it and writes the
- * history row inside the same transaction, so a change cannot land without its history.
- */
 export class SupabaseTableRepository<Row, Input, Patch> implements Repository<Row, Input, Patch> {
   constructor(
     private readonly db: SupabaseClient,
@@ -154,7 +148,6 @@ export class SupabaseRoleRepository implements RoleRepository {
   }
 }
 
-/** Creating a repair goes through create_maintenance_log, so the log and its parts land together. */
 export class SupabaseMaintenanceRepository<
   Input extends { parts?: unknown[] },
   Patch,
@@ -315,7 +308,6 @@ export class SupabaseSessionRepository implements SessionRepository {
   }
 }
 
-/** Reads the history table. Row-level security decides which rows the caller sees. */
 export class SupabaseHistoryRepository implements HistoryRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -332,11 +324,6 @@ export class SupabaseHistoryRepository implements HistoryRepository {
   }
 }
 
-/**
- * The owner's user list and role changes, through list_users and set_user_role. Both check in
- * the database that the caller is an owner, so a missed check in the API still cannot leak or
- * change anyone's account.
- */
 export class SupabaseUserRepository implements UserRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -360,12 +347,10 @@ export class SupabaseUserRepository implements UserRepository {
   }
 }
 
-/** Sums the numeric column of every row, treating a missing value as zero. */
 function sum<T>(rows: T[], pick: (row: T) => unknown): number {
   return rows.reduce((total, row) => total + (Number(pick(row)) || 0), 0);
 }
 
-/** The first day of the month a date falls in, and the first day of the next one. */
 function monthStart(date: string): string {
   return `${date.slice(0, 7)}-01`;
 }
@@ -416,9 +401,6 @@ export class SupabaseAnalyticsRepository implements AnalyticsRepository {
       .lte("date", period.to)
       .order("date");
     if (error) throw translate(error);
-    // A day with no shift recorded is absent rather than zero: zero means nothing was
-    // produced, absent means nobody captured anything, and a chart that draws them the same
-    // way hides the second problem entirely.
     const byDay = new Map<string, number>();
     for (const row of data ?? []) {
       const day = String(row.date);
@@ -427,10 +409,6 @@ export class SupabaseAnalyticsRepository implements AnalyticsRepository {
     return [...byDay.entries()].map(([date, tons]) => ({ date, tons }));
   }
 
-  /**
-   * Fixed costs are stored once per month. A period that covers part of a month gets its share
-   * of that month's cost, by days, rather than all of it or none of it.
-   */
   async fixedCosts(mineId: string, period: Period): Promise<number> {
     const { data, error } = await this.db
       .from("static_costs")
@@ -454,9 +432,6 @@ export class SupabaseAnalyticsRepository implements AnalyticsRepository {
   }
 
   async maintenanceCost(mineId: string, period: Period): Promise<number> {
-    // Maintenance hangs off equipment, and equipment belongs to a site, so the site's
-    // equipment is read first. Two queries rather than a join, because the client speaks
-    // PostgREST rather than SQL.
     const { data: equipment, error: equipmentError } = await this.db
       .from("equipment")
       .select("id")
@@ -505,13 +480,6 @@ export class SupabaseAnalyticsRepository implements AnalyticsRepository {
   }
 }
 
-/**
- * Everyone who has left, for the retention report.
- *
- * `id_number` is selected but never returned. Reading a column to answer "is one still stored"
- * and returning it are different things, and the second one would put identity numbers into a
- * response body, a log and a browser cache to answer a question that only needed a yes or no.
- */
 export class SupabaseRetentionRepository implements RetentionRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -527,10 +495,6 @@ export class SupabaseRetentionRepository implements RetentionRepository {
     const rows = (data ?? []) as Row[];
     if (rows.length === 0) return [];
 
-    // Identity numbers are not on the employee row. T11 moved them into
-    // employee_personal_information and revoked application users from that table entirely, so
-    // the only way to ask whether one is still stored is to ask the database. The function
-    // returns ids and no numbers, and refuses anybody but the owner.
     const { data: holding, error: holdingError } = await this.db.rpc(
       "employees_holding_identity_number",
     );
@@ -547,7 +511,6 @@ export class SupabaseRetentionRepository implements RetentionRepository {
   }
 }
 
-/** A person's own notifications. Row-level security limits every call to their own rows. */
 export class SupabaseNotificationRepository implements NotificationRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -565,8 +528,6 @@ export class SupabaseNotificationRepository implements NotificationRepository {
   }
 
   async markRead(userId: string, id: string): Promise<boolean> {
-    // The user id is in the filter as well as in the policy. The policy is what enforces it;
-    // this makes the intent readable without going to look the policy up.
     const { data, error } = await this.db
       .from("notifications")
       .update({ read_at: new Date().toISOString() })
@@ -579,14 +540,11 @@ export class SupabaseNotificationRepository implements NotificationRepository {
   }
 }
 
-/** Scheduled runs. Read by the owner through the API, written only by the sweep. */
 export class SupabaseJobRepository implements JobRepository {
   constructor(private readonly db: SupabaseClient) {}
 
   async claim(job: string, ranFor: string): Promise<boolean> {
     const { error } = await this.db.from("job_runs").insert({ job, ran_for: ranFor });
-    // 23505 is the unique violation on (job, ran_for): somebody else has the day. That is an
-    // ordinary outcome here, not a failure, which is why it is checked rather than thrown.
     if (error && error.code === "23505") return false;
     if (error) throw translate(error);
     return true;
@@ -614,9 +572,6 @@ export class SupabaseJobRepository implements JobRepository {
   }
 }
 
-/**
- * What the sweep reads and writes. Built with the service credential, never from a request.
- */
 export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -633,7 +588,6 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
     >[];
     if (rows.length === 0) return [];
 
-    // The latest maintenance log per machine, in one read rather than one read per machine.
     const { data: logs, error: logError } = await this.db
       .from("maintenance_logs")
       .select("equipment_id, date, next_due_date, next_due_tons")
@@ -654,7 +608,6 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
       next_due_date: string | null;
       next_due_tons: number | null;
     }[]) {
-      // Ordered newest first, so the first one seen for a machine is its most recent service.
       if (!latest.has(log.equipment_id)) latest.set(log.equipment_id, log);
     }
 
@@ -671,13 +624,6 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
   }
 
   async recipients(mineId: string | null): Promise<string[]> {
-    // Owners always. A worker is never told, because a worker cannot book a machine in, and a
-    // notification somebody can do nothing about is the kind people learn to ignore.
-    //
-    // Managers are told only about their own plant. That is possible because a mine now carries
-    // its plant, which is what joins the mine side of the system to the people side. A mine with
-    // no plant recorded reaches the owners alone: they are the ones who can fix the record, and
-    // telling every manager instead would be the behaviour this replaced.
     const { data: roleRows, error: roleError } = await this.db
       .from("user_roles")
       .select("user_id, role")
@@ -690,7 +636,6 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
       if (row.role === "owner") owners.add(row.user_id);
       else managers.add(row.user_id);
     }
-    // Somebody holding both roles is an owner, who sees every plant anyway.
     for (const id of owners) managers.delete(id);
 
     if (!mineId || managers.size === 0) return [...owners];
@@ -716,15 +661,6 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
   }
 
   async raise(rows: readonly NotificationDraft[]): Promise<number> {
-    // One statement, so that two sweeps racing cannot both create the same reminder.
-    //
-    // `onConflict` is a bare column list with no spaces: PostgREST splits it on the comma and
-    // does not trim, so " dedupe_key" would be sent as a column name that does not exist. It
-    // names the constraint the migration adds, which is a plain unique constraint rather than a
-    // partial index precisely because PostgREST cannot express an index predicate here.
-    //
-    // `ignoreDuplicates` makes it ON CONFLICT DO NOTHING, and the select returns only the rows
-    // that were really inserted, which is what the caller counts.
     const { data, error } = await this.db
       .from("notifications")
       .upsert(rows as NotificationDraft[], {
@@ -755,8 +691,6 @@ export class SupabaseSettings implements SettingsRepository {
       .select("value")
       .eq("key", "capture_max_age_days")
       .maybeSingle();
-    // Before the settings migration is applied there is no table yet. Capture keeps working on
-    // the documented default rather than failing outright; any other error is still an error.
     if (error && (error.code === "42P01" || error.code === "PGRST205"))
       return DEFAULT_CAPTURE_MAX_AGE_DAYS;
     if (error) throw translate(error);
@@ -784,7 +718,6 @@ type RunRow = {
   stale_reason: string | null;
 };
 
-/** report_runs (T10): which month-end reports were produced, and which have gone out of date. */
 export class SupabaseReportRunRepository implements ReportRunRepository {
   constructor(private readonly db: SupabaseClient) {}
 
@@ -832,4 +765,12 @@ export class SupabaseReportRunRepository implements ReportRunRepository {
       out_of_date_reason: r.stale_reason,
     }));
   }
+}
+
+/**
+ * Registry of the worker-purchase repository. Constructed on the same Supabase
+ * client as the other repositories, with reads scoped by RLS on the table.
+ */
+export function buildWorkerPurchasesRepository(db: SupabaseClient) {
+  return supabaseWorkerPurchases(db);
 }
