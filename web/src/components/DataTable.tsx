@@ -51,11 +51,18 @@ export function DataTable<T extends { id: string }>({
   const valueOf = (row: T, col: Column<T>): Plain =>
     col.value ? col.value(row) : ((row as Record<string, unknown>)[col.key] as Plain);
 
+  const haystacks = useMemo(() => {
+    const index = new Map<string, string>();
+    for (const row of rows) {
+      index.set(row.id, columns.map((c) => String(valueOf(row, c) ?? "").toLowerCase()).join("\n"));
+    }
+    return index;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, columns]);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let out = q
-      ? rows.filter((row) => columns.some((c) => String(valueOf(row, c) ?? "").toLowerCase().includes(q)))
-      : rows;
+    let out = q ? rows.filter((row) => (haystacks.get(row.id) ?? "").includes(q)) : rows;
     if (sort) {
       const col = columns.find((c) => c.key === sort.key);
       if (col) out = [...out].sort((a, b) => compare(valueOf(a, col), valueOf(b, col), sort.dir));
@@ -63,7 +70,7 @@ export function DataTable<T extends { id: string }>({
     return out;
     // valueOf only reads columns, which is already a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, columns, query, sort]);
+  }, [rows, columns, haystacks, query, sort]);
 
   const pages = pageSize ? Math.max(1, Math.ceil(shown.length / pageSize)) : 1;
   const current = Math.min(page, pages);
