@@ -78,6 +78,31 @@ describe("T11: protected employee personal information", () => {
   it("refuses a worker access to identity numbers", async () => {
     expect(await disclose(worker, krielEmployee)).toBeNull();
   });
+
+  it("refuses a manager who has not been assigned to a plant", async () => {
+    const unassigned = await db.user("manager");
+    expect(await disclose(unassigned, krielEmployee)).toBeNull();
+    expect(await disclose(unassigned, ogiesEmployee)).toBeNull();
+  });
+
+  it("records a refused attempt in the audit log, and an allowed one as allowed", async () => {
+    const other = await db.user("manager");
+    await db.transaction(async (tx) => {
+      await tx.query("SELECT set_config('request.jwt.claim.role', 'service_role', true)");
+      await tx.query("UPDATE profiles SET plant = 'Kriel' WHERE id = $1", [other]);
+    });
+
+    await disclose(other, ogiesEmployee);
+    await disclose(other, krielEmployee);
+
+    const audit = await db.query<{ employee_id: string; allowed: boolean }>(
+      "SELECT employee_id, allowed FROM personal_information_audit WHERE user_id = $1",
+      [other],
+    );
+    expect(audit.rows).toHaveLength(2);
+    expect(audit.rows.find((r) => r.employee_id === ogiesEmployee)?.allowed).toBe(false);
+    expect(audit.rows.find((r) => r.employee_id === krielEmployee)?.allowed).toBe(true);
+  });
 });
 
 describe("T11: updating protected employee personal information", () => {
@@ -86,6 +111,26 @@ describe("T11: updating protected employee personal information", () => {
       db.as(manager, (tx) =>
         tx.query("SELECT public.set_employee_id_number($1, '9999999999999')", [ogiesEmployee]),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Not authorized to update personal information/);
+  });
+
+  it("leaves the stored identity number unchanged after a refused update", async () => {
+    await db
+      .as(manager, (tx) =>
+        tx.query("SELECT public.set_employee_id_number($1, '9999999999999')", [ogiesEmployee]),
+      )
+      .catch(() => undefined);
+    const stored = await db.query<{ id_number: string }>(
+      "SELECT id_number FROM employee_personal_information WHERE employee_id = $1",
+      [ogiesEmployee],
+    );
+    expect(stored.rows[0].id_number).toBe("2222222222222");
+  });
+
+  it("lets a manager update an identity number in their own plant", async () => {
+    await db.as(manager, (tx) =>
+      tx.query("SELECT public.set_employee_id_number($1, '3333333333333')", [krielEmployee]),
+    );
+    expect(await disclose(manager, krielEmployee)).toBe("3333333333333");
   });
 });
