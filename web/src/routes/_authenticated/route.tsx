@@ -38,7 +38,7 @@ function AuthedLayout() {
       <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-14 border-b bg-card flex items-center gap-3 px-4 sticky top-0 z-10">
+          <header className="h-[calc(3.5rem_+_env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] border-b bg-card flex items-center gap-3 px-4 sticky top-0 z-10">
             <SidebarTrigger />
             <div className="flex-1" />
             <div className="text-sm text-muted-foreground hidden sm:block">

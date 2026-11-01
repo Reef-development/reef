@@ -7,7 +7,10 @@ import {
   Fuel,
   Receipt,
   MonitorSmartphone,
+  ClipboardList, // Added for manager
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/worker/")({
   component: WorkerHome,
@@ -53,6 +56,36 @@ const tiles = [
 ] as const;
 
 function WorkerHome() {
+  // 1. Fetch the user's role to conditionally show the manager tile
+  const { data: role } = useQuery({
+    queryKey: ["my-role"],
+    queryFn: async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) return null;
+      
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", auth.user.id);
+        
+      const list = roles?.map(r => r.role) || [];
+      if (list.includes("owner")) return "owner";
+      if (list.includes("manager")) return "manager";
+      return "worker";
+    }
+  });
+
+  // 2. Build the tile list, adding attendance if manager
+  const allTiles = [
+    ...tiles,
+    ...(role === "manager" ? [{
+      to: "/manager/log-attendance",
+      label: "Log Attendance",
+      icon: ClipboardList,
+      color: "bg-emerald-700 text-white border-emerald-800", // Distinct green color for manager
+    }] as const : []),
+  ];
+
   return (
     <div className="space-y-4 animate-fade-in-soft">
       <div className="py-4 animate-fade-up">
@@ -83,7 +116,7 @@ function WorkerHome() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
-        {tiles.map((t, i) => (
+        {allTiles.map((t, i) => (
           <Link
             key={t.to}
             to={t.to}
