@@ -21,12 +21,14 @@ export type Column<T> = {
 
 type Sort = { key: string; dir: "asc" | "desc" };
 
+const collator = new Intl.Collator();
+
 /** Empty values always sort last, whichever way the column is sorted. */
 function compare(a: Plain, b: Plain, dir: Sort["dir"]): number {
   const emptyA = a === null || a === undefined || a === "";
   const emptyB = b === null || b === undefined || b === "";
   if (emptyA || emptyB) return emptyA === emptyB ? 0 : emptyA ? 1 : -1;
-  const order = typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b));
+  const order = typeof a === "number" && typeof b === "number" ? a - b : collator.compare(String(a), String(b));
   return dir === "asc" ? order : -order;
 }
 
