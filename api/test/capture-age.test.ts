@@ -196,9 +196,7 @@ describe("T10: entries dated after today", () => {
       body: { vehicle_label: "LDV 3", litres: 40, cost_per_litre: 22, date: daysAhead(365) },
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).error.details).toEqual([
-      expect.objectContaining({ path: "date" }),
-    ]);
+    expect((await res.json()).error.details).toEqual([expect.objectContaining({ path: "date" })]);
   });
 
   it("applies to repairs, and to managers and owners as well as workers", async () => {
