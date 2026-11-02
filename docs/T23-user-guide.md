@@ -4,7 +4,6 @@
 
 | **Details** | **Information** |
 |---|---|
-| **Student** | Tlamelo Mothupi |
 | **Project** | REEF Operations Platform |
 | **Task** | T23 — User Guide and Plant Wall Card |
 | **Reviewed by** | Bradley |

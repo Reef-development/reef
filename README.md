@@ -1,5 +1,5 @@
 # REEF Operations Platform
-## Presentation : https://youtu.be/d_Vj03qGSbs
+## Presentation : https://youtu.be/w1bI3Ra2Kb0?si=2N5wdJKG87XPTsws
 An operations platform for **Resource Energy Engineering Fuels (REEF)**, a South African
 contract mining services company that runs coal washing plants across Mpumalanga.
 
@@ -9,12 +9,13 @@ fuel, downtime and workforce records were kept in separate places, so a simple q
 platform keeps all of those records in one system, gives each person only what their role
 needs, and works the answers out automatically.
 
-> INSY7315 Work Integrated Learning, Part 2 (Implementation)
+> INSY7315 Work Integrated Learning, Task 2 (Implementation) and Task 3 (Final Submission)
 
 ---
 
 ## Contents
 
+- [Task 3: final submission](#task-3-final-submission)
 - [Live system and demo accounts](#live-system-and-demo-accounts)
 - [Android app](#android-app)
 - [The team](#the-team)
@@ -25,7 +26,26 @@ needs, and works the answers out automatically.
 - [Running it locally](#running-it-locally)
 - [Running the tests](#running-the-tests)
 - [Documentation](#documentation)
-- [Task 1 prototype](#task-1-prototype)
+
+---
+
+## Task 3: final submission
+
+This repository is the group's implementation (Task 2) and final project (Task 3) for INSY7315. It contains all program source code
+(front end, back end, database, Android app and CI/CD workflows), and this README is the entry point to
+everything else.
+
+| Task 3 item | Where to find it |
+|---|---|
+| Final project (front end, back end, hosting, CI/CD) | [Live system and demo accounts](#live-system-and-demo-accounts), source in `web/`, `api/`, `shared/`, `supabase/` and `mobile/` |
+| Group | Group 3, Codal Reef |
+| Group members (names, surnames, student numbers) | [The team](#the-team) |
+| User guide | [User manual v2 (PDF, 49 pages)](docs/REEF-user-manual-v2.pdf), plus the Markdown version [`docs/T23-user-guide.md`](docs/T23-user-guide.md) |
+| Final report | Part 1 documentation (`REEF OPERATIONS PLATFORM VERSION 14 (1).docx`) plus the technical documents listed under [Documentation](#documentation) |
+| Hosting and deployment | [Hosting, and why we chose it](#hosting-and-why-we-chose-it) and [Deploy plan](docs/t25-deploy-plan.md) |
+| CI/CD pipeline | [GitHub workflow](#github-workflow-branches-checks-and-deployment); workflow files are in `.github/workflows/` |
+| Android app | [`releases/reef-debug.apk`](releases/reef-debug.apk), see [Android app](#android-app) |
+| Demo video | https://youtu.be/w1bI3Ra2Kb0?si=2N5wdJKG87XPTsws |
 
 ---
 
@@ -35,7 +55,7 @@ needs, and works the answers out automatically.
 |---|---|
 | Web app | https://reef-joe-d0a1.vercel.app/ |
 | Team repository | https://github.com/Reef-development/reef |
-| Submission repository | https://github.com/EMGPRS/insy7315-2026-task-2-usmartayler |
+| Submission repository | https://github.com/EMGPRS/insy7315-2026-insy7315-2026-final-project-usmartayler |
 | CI/CD runs | https://github.com/Reef-development/reef/actions |
 
 Sign in with one of these demo accounts:
@@ -78,7 +98,6 @@ source is in [`mobile/`](mobile/).
 | Tayler Usmar | ST10445063 | Maintenance and daily operations, change history and reasons, stale reports, purchasing actions, accessibility |
 | Joe Leo Van Niekerk | ST10445055 | Stock and reference data, row-level security, deployment |
 | Tshepo Kau | ST10454055 | Downtime and workforce, sign-in sessions, test coverage, reorder requests |
-| Tlamelo Mothupi | ST10460421 | Administration and purchasing, DevOps, user guide |
 
 ---
 
@@ -207,7 +226,7 @@ The web app prints its own local address when it starts.
 | API tests, including the real-PostgreSQL tests | `api/` | `npm test` |
 | API type check and endpoint list | `api/` | `npm run typecheck` and `npm run endpoints:check` |
 | Web tests | `web/` | `npx vitest run` |
-| Lint and types | repo root | `npm run lint` and `npm run typecheck` |
+| Lint | repo root | `npm run lint` |
 | Quick rules tests | repo root | `npm run test:quick` |
 | Secrets scan | repo root | `npm run secrets:check` |
 
@@ -220,7 +239,8 @@ regenerated `docs/api-endpoints.md`.
 
 | Document | What it covers |
 |---|---|
-| [User guide](docs/T23-user-guide.md) | How to use the system, for each role |
+| [User manual v2 (PDF)](docs/REEF-user-manual-v2.pdf) | The full user manual for plant workers, site managers and the owner, including the handset application |
+| [User guide (Markdown)](docs/T23-user-guide.md) | Short written guide for each role |
 | [API endpoints](docs/api-endpoints.md) | Every endpoint, who may call it and what it refuses |
 | [Deployment](docs/DEPLOYMENT.md) | Secrets, variables and how to replace them |
 | [Deploy plan](docs/t25-deploy-plan.md) | How the system went live |
@@ -231,10 +251,3 @@ regenerated `docs/api-endpoints.md`.
 | [Notifications](docs/notifications.md) | The service reminder sweep |
 | [Lost device procedure](docs/t13-lost-device-procedure.md) | Cutting off a lost phone's sign-in |
 | Part 1 documentation | `REEF OPERATIONS PLATFORM VERSION 14 (1).docx` in the repo root |
-
----
-
-## Task 1 prototype
-
-The original Task 1 prototype is kept in `src/` at the repo root and is no longer the
-delivered system. To run it: `npm install` and then `npm run dev` from the repo root.
