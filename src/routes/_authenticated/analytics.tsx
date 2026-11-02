@@ -35,15 +35,34 @@ function Page() {
     const months: any[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const next = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const prod = (production.data ?? []).filter((p) => { const pd = new Date(p.date); return pd >= d && pd < next; });
-      const mlogs = (maint.data ?? []).filter((m) => { const md = new Date(m.date); return md >= d && md < next; });
+      
+      // Create target string "YYYY-MM" (e.g., "2026-06")
+      const targetMonthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+      const prod = (production.data ?? []).filter((p) => {
+        if (!p.date) return false;
+        const pStr = String(p.date).substring(0, 7);
+        return pStr === targetMonthStr;
+      });
+
+      const mlogs = (maint.data ?? []).filter((m) => {
+        if (!m.date) return false;
+        const mStr = String(m.date).substring(0, 7);
+        return mStr === targetMonthStr;
+      });
+
       const tons = prod.reduce((s, p) => s + Number(p.tons_produced), 0);
       const mag = prod.reduce((s, p) => s + Number(p.magnetite_cost), 0);
       const ot = prod.reduce((s, p) => s + Number(p.overtime_cost), 0);
       const mt = mlogs.reduce((s, m) => s + Number(m.total_cost), 0);
-      const st = (staticCosts.data ?? []).filter((s) => { const sd = new Date(s.month); return sd.getMonth() === d.getMonth() && sd.getFullYear() === d.getFullYear(); })
-        .reduce((s, x) => s + Number(x.amount), 0);
+      
+      // THE FIX: Compare year and month as strings to avoid timezone shifts
+      const st = (staticCosts.data ?? []).filter((s) => {
+        if (!s.month) return false;
+        const sStr = String(s.month).substring(0, 7);
+        return sStr === targetMonthStr;
+      }).reduce((s, x) => s + Number(x.amount), 0);
+
       const total = mag + ot + mt + st;
       months.push({
         key: `${d.getFullYear()}-${d.getMonth()}`,
