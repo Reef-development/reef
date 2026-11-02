@@ -226,7 +226,7 @@ The web app prints its own local address when it starts.
 | API tests, including the real-PostgreSQL tests | `api/` | `npm test` |
 | API type check and endpoint list | `api/` | `npm run typecheck` and `npm run endpoints:check` |
 | Web tests | `web/` | `npx vitest run` |
-| Lint | repo root | `npm run lint` |
+| Lint and types | repo root | `npm run lint` and `npm run typecheck` |
 | Quick rules tests | repo root | `npm run test:quick` |
 | Secrets scan | repo root | `npm run secrets:check` |
 
