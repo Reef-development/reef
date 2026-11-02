@@ -28,6 +28,7 @@ import type {
   SettingsRepository,
   StockUsageRepository,
   ServiceSweepRepository,
+  OutgoingEmail,
   UpdateResult,
   UserRepository,
   UserSession,
@@ -670,6 +671,28 @@ export class SupabaseServiceSweepRepository implements ServiceSweepRepository {
       .select("id");
     if (error) throw translate(error);
     return (data ?? []).length;
+  }
+
+  async unsent(): Promise<OutgoingEmail[]> {
+    const { data, error } = await this.db.rpc("notifications_to_email");
+    if (error) throw translate(error);
+    return (data ?? []) as OutgoingEmail[];
+  }
+
+  async markEmailed(id: string): Promise<void> {
+    const { error } = await this.db
+      .from("notifications")
+      .update({ emailed_at: new Date().toISOString(), email_failed_at: null, email_error: null })
+      .eq("id", id);
+    if (error) throw translate(error);
+  }
+
+  async markEmailFailed(id: string, reason: string): Promise<void> {
+    const { error } = await this.db
+      .from("notifications")
+      .update({ email_failed_at: new Date().toISOString(), email_error: reason.slice(0, 500) })
+      .eq("id", id);
+    if (error) throw translate(error);
   }
 }
 

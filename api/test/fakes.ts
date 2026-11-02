@@ -803,6 +803,10 @@ export class MemorySweep implements ServiceSweepRepository {
   plantOfMine: Record<string, string> = {};
   raised: NotificationDraft[] = [];
   failWith: Error | null = null;
+  /** User id to email address, as auth.users holds it. */
+  emails: Record<string, string> = {};
+  /** Per raised notification, by position: when its email went out, and why it last failed. */
+  delivery: { emailed_at: string | null; email_error: string | null }[] = [];
 
   async machines() {
     await tick();
@@ -824,9 +828,24 @@ export class MemorySweep implements ServiceSweepRepository {
       );
       if (already) continue;
       this.raised.push(d);
+      this.delivery.push({ emailed_at: null, email_error: null });
       created += 1;
     }
     return created;
+  }
+  async unsent() {
+    await tick();
+    return this.raised.flatMap((d, i) =>
+      this.delivery[i].emailed_at === null && this.emails[d.user_id]
+        ? [{ id: String(i), email: this.emails[d.user_id], subject: d.subject, body: d.body }]
+        : [],
+    );
+  }
+  async markEmailed(id: string) {
+    this.delivery[Number(id)] = { emailed_at: new Date().toISOString(), email_error: null };
+  }
+  async markEmailFailed(id: string, error: string) {
+    this.delivery[Number(id)].email_error = error;
   }
 }
 

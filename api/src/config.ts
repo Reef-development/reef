@@ -29,6 +29,13 @@ const Env = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
     // REEF's own calendar day, so "did yesterday's sweep run" has exactly one answer.
     SCHEDULE_TIMEZONE: z.string().min(1).default("Africa/Johannesburg"),
+    // Where reminders are emailed from (T17), as one URL, e.g. smtps://user:pass@host:465.
+    // Optional: without it reminders are still raised and shown in the app, and start-up says
+    // that email is off.
+    SMTP_URL: z.string().min(1).optional(),
+    MAIL_FROM: z.string().min(1).default("REEF Operations <no-reply@reef.co.za>"),
+    // The web app's address, for the link in each email. Defaults to the first allowed origin.
+    APP_URL: z.url().optional(),
   })
   .refine((e) => e.RETENTION_IDENTITY_YEARS <= e.RETENTION_RECORD_YEARS, {
     // Removing the identity number while keeping the rest of the record is the whole point of the
@@ -46,6 +53,8 @@ export type Config = {
   retention: RetentionYears;
   serviceRoleKey: string | null;
   timezone: string;
+  smtp: { url: string; from: string } | null;
+  appUrl: string;
 };
 
 /** Fails at start-up, naming every missing setting, rather than on the first request. */
@@ -69,5 +78,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     },
     serviceRoleKey: e.SUPABASE_SERVICE_ROLE_KEY ?? null,
     timezone: e.SCHEDULE_TIMEZONE,
+    smtp: e.SMTP_URL ? { url: e.SMTP_URL, from: e.MAIL_FROM } : null,
+    appUrl: (e.APP_URL ?? e.CORS_ORIGINS.split(",")[0].trim()).replace(/\/$/, ""),
   };
 }

@@ -1,6 +1,6 @@
 import type { JobReport, JobRun } from "@reef/shared";
 import type { JobRepository, ServiceSweepRepository } from "../repositories/types.js";
-import { describe, sweep } from "./sweep.js";
+import { describe, sweep, type MailSettings } from "./sweep.js";
 
 export const SERVICE_SWEEP = "service_due_sweep";
 
@@ -24,6 +24,8 @@ export type SchedulerDeps = {
   jobs: JobRepository;
   sweepRepo: ServiceSweepRepository;
   zone: string;
+  /** Emails each new reminder when set (T17). */
+  mail?: MailSettings;
   now?: () => Date;
   log?: (message: string) => void;
 };
@@ -41,7 +43,7 @@ export async function runSweepFor(deps: SchedulerDeps, day: string): Promise<boo
   if (!claimed) return false;
 
   try {
-    const result = await sweep(deps.sweepRepo, day);
+    const result = await sweep(deps.sweepRepo, day, deps.mail);
     await deps.jobs.finish(SERVICE_SWEEP, day, "ok", describe(result));
     deps.log?.(`service sweep for ${day}: ${describe(result)}`);
   } catch (err) {
