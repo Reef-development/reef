@@ -1,7 +1,6 @@
 # T25: set up the live environment and deploy
 
 Author: Joe Leo Van Niekerk
-Checked by: Tlamelo
 Task sheet: T25, day 7 to 8. Waits on T3 and T4.
 
 ## What this document is
